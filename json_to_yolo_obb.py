@@ -1,10 +1,10 @@
-"""将 LabelMe / X-AnyLabeling 的 oriented_rectangle JSON 转为 YOLO-OBB txt。"""
+"""将 LabelMe / X-AnyLabeling 的 oriented_rectangle JSON 转为 YOLO-OBB txt。."""
+
 from __future__ import annotations
 
 import argparse
 import json
 from pathlib import Path
-
 
 # 类别顺序固定，和后续 data.yaml 保持一致
 CLASS_NAMES = ["瓶子", "镊子", "美工刀", "手套", "灭菌器"]
