@@ -1,4 +1,5 @@
-"""朱顶红无菌实训评估台 Web 服务。"""
+"""朱顶红无菌实训评估台 Web 服务。."""
+
 from __future__ import annotations
 
 import sys
