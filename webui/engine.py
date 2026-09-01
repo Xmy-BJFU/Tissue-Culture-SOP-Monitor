@@ -1,4 +1,5 @@
-"""后台推理会话：复用 video_track_ocr_hand_pose 的检测与动作规则。"""
+"""后台推理会话：复用 video_track_ocr_hand_pose 的检测与动作规则。."""
+
 from __future__ import annotations
 
 import sys
@@ -11,6 +12,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+
 from ultralytics import YOLO
 from ultralytics.utils.plotting import Annotator, colors
 
@@ -305,7 +307,12 @@ class LabEngine:
             self.last_seen[tid] = self.frame_id
             if self.class_names.get(det.cls_id, str(det.cls_id)) == core.OCR_CLASS:
                 bottle_obs.append(
-                    (tid, det.pts.mean(axis=0), float(max(det.xywh[2], det.xywh[3])), np.asarray(det.xyxy, dtype=np.float32))
+                    (
+                        tid,
+                        det.pts.mean(axis=0),
+                        float(max(det.xywh[2], det.xywh[3])),
+                        np.asarray(det.xyxy, dtype=np.float32),
+                    )
                 )
         for src, dst, lab in core.rebind_ocr_cache(
             self.ocr_cache,
@@ -332,8 +339,10 @@ class LabEngine:
                 tracked_glove_xyxy.append([float(v) for v in det.xyxy])
             if cls_name == core.OCR_CLASS:
                 record = self.ocr_cache.get(tid)
-                if (tid not in close_ids) and (tid not in blocked_ids) and core.should_run_ocr(
-                    record, self.frame_id, do_ocr, core.OCR_RETRY, core.OCR_REFRESH
+                if (
+                    (tid not in close_ids)
+                    and (tid not in blocked_ids)
+                    and core.should_run_ocr(record, self.frame_id, do_ocr, core.OCR_RETRY, core.OCR_REFRESH)
                 ):
                     expand = core.neighbor_crop_expand(center, size, bottle_obs, tid, core.CROP_EXPAND)
                     crop = (
@@ -483,7 +492,7 @@ class LabEngine:
         if ov.get("boxes", True):
             for pts, cls_id, name, track_score, tid in box_rows:
                 holding = tid in view.held_tids
-                label = name if ov.get("labels", True) else ""
+                name if ov.get("labels", True) else ""
                 if ov.get("labels", True):
                     tag = f"持 {name} {track_score:.2f}" if holding else f"{name} {track_score:.2f}"
                 else:
@@ -512,10 +521,14 @@ class LabEngine:
         naocl = self.soaks["次氯酸钠"]
         states = {
             "ppe": "done" if self.ppe_seen else ("active" if self.running else "idle"),
-            "sterile": "done" if flags.get("step1_ok") else ("active" if flags.get("tweezers_ok") or flags.get("knife_ok") else "idle"),
+            "sterile": "done"
+            if flags.get("step1_ok")
+            else ("active" if flags.get("tweezers_ok") or flags.get("knife_ok") else "idle"),
             "alcohol": "done" if alcohol["done"] else ("active" if alcohol["running"] else "idle"),
             "water1": "done" if water["done"] else ("active" if water["running"] else "idle"),
-            "naocl": "done" if (naocl["done"] and flags.get("shake_scored")) else ("active" if naocl["running"] or flags.get("naocl_poured") else "idle"),
+            "naocl": "done"
+            if (naocl["done"] and flags.get("shake_scored"))
+            else ("active" if naocl["running"] or flags.get("naocl_poured") else "idle"),
             "rinse": "done" if self.rinse_count >= 3 else ("active" if self.rinse_count else "idle"),
             "cut": "done" if flags.get("cutting_ok") else "idle",
             "insert": "done" if flags.get("insert_ok") else "idle",
@@ -537,9 +550,7 @@ class LabEngine:
                 verdict = soak.get("verdict") or ""
                 if verdict == "ok":
                     time_hits.append(1.0)
-                elif verdict in ("early", "late"):
-                    time_hits.append(0.4)
-                elif soak.get("early"):
+                elif verdict in ("early", "late") or soak.get("early"):
                     time_hits.append(0.4)
                 else:
                     time_hits.append(0.8 if soak.get("running") else 1.0)
@@ -553,10 +564,34 @@ class LabEngine:
         return {
             "total": total,
             "dims": [
-                {"id": "step", "name": "实训步骤准确率", "weight": 40, "score": step_s, "detail": f"{done}/{len(sop)} 步完成"},
-                {"id": "item", "name": "操作物品正确率", "weight": 30, "score": item_s, "detail": f"已识别 {len(roles & set(EXPECTED_ROLES))}/{len(EXPECTED_ROLES)} 类标签"},
-                {"id": "time", "name": "操作时间规范性", "weight": 10, "score": time_s, "detail": "倒完回正起算，倒出液体停表，±10% 裕量；偏早或超时扣分"},
-                {"id": "safety", "name": "操作安全与规范", "weight": 20, "score": safe_s, "detail": "已检出手套" if self.ppe_seen else "未检出手套"},
+                {
+                    "id": "step",
+                    "name": "实训步骤准确率",
+                    "weight": 40,
+                    "score": step_s,
+                    "detail": f"{done}/{len(sop)} 步完成",
+                },
+                {
+                    "id": "item",
+                    "name": "操作物品正确率",
+                    "weight": 30,
+                    "score": item_s,
+                    "detail": f"已识别 {len(roles & set(EXPECTED_ROLES))}/{len(EXPECTED_ROLES)} 类标签",
+                },
+                {
+                    "id": "time",
+                    "name": "操作时间规范性",
+                    "weight": 10,
+                    "score": time_s,
+                    "detail": "倒完回正起算，倒出液体停表，±10% 裕量；偏早或超时扣分",
+                },
+                {
+                    "id": "safety",
+                    "name": "操作安全与规范",
+                    "weight": 20,
+                    "score": safe_s,
+                    "detail": "已检出手套" if self.ppe_seen else "未检出手套",
+                },
             ],
         }
 

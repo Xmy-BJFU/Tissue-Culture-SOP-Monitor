@@ -1,4 +1,4 @@
-"""实时摄像头：YOLO-OBB + ByteTrack + OCR。
+"""实时摄像头：YOLO-OBB + ByteTrack + OCR。.
 
 框上只保留一条 YOLO 风格标签「名字 + 置信度」。
 OCR 归到酒精 / 无菌水 / 次氯酸钠 / 灭菌瓶 / 培养基。
@@ -8,6 +8,7 @@ OCR 归到酒精 / 无菌水 / 次氯酸钠 / 灭菌瓶 / 培养基。
 
 按 Q 退出，按 S 保存当前帧。
 """
+
 from __future__ import annotations
 
 import sys
@@ -17,6 +18,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+
 from ultralytics import YOLO
 from ultralytics.trackers.byte_tracker import BYTETracker
 from ultralytics.utils import YAML, IterableSimpleNamespace
@@ -38,36 +40,36 @@ from ocr_track_bind import (
 
 WEIGHTS = r"E:\XMY\代码\ultralytics\runs\train\11n_100_deg45（26_17）\weights\best.pt"
 CAMERA_ID = 0
-IMGSZ = 640              # YOLO 检测输入边长，只影响找框准不准/快不快，不加 OCR 清晰度
-CONF = 0.25              # YOLO 置信度阈值，低于此的检测丢掉
-IOU = 0.7                # YOLO NMS 的 IoU 阈值，越大越容易保留重叠框
-DEVICE = "0"             # YOLO 设备：0=第一块 GPU，cpu=CPU
-OCR_CLASS = "瓶子"        # 只有这个检测类才做 OCR，其它类只画「类别 + 置信度」
+IMGSZ = 640  # YOLO 检测输入边长，只影响找框准不准/快不快，不加 OCR 清晰度
+CONF = 0.25  # YOLO 置信度阈值，低于此的检测丢掉
+IOU = 0.7  # YOLO NMS 的 IoU 阈值，越大越容易保留重叠框
+DEVICE = "0"  # YOLO 设备：0=第一块 GPU，cpu=CPU
+OCR_CLASS = "瓶子"  # 只有这个检测类才做 OCR，其它类只画「类别 + 置信度」
 
 # ---- OCR 节奏（单位都是「处理帧」，秒数 ≈ 帧数 / 画面 FPS）----
-OCR_EVERY = 4            # 每隔 N 帧才允许跑 OCR，避免每帧都打满 CPU
-OCR_RETRY = 6            # 还没归到已知标签时，隔多少帧再试
-OCR_REFRESH = 18         # 已经有标签时，隔多少帧复核一次；检到不同则改用新标签，没检到则沿用
-MOVE_THRESH = 40.0       # 保留兼容，不再用位移强制 OCR（快移时画面糊，强制识别易把标签冲掉）
+OCR_EVERY = 4  # 每隔 N 帧才允许跑 OCR，避免每帧都打满 CPU
+OCR_RETRY = 6  # 还没归到已知标签时，隔多少帧再试
+OCR_REFRESH = 18  # 已经有标签时，隔多少帧复核一次；检到不同则改用新标签，没检到则沿用
+MOVE_THRESH = 40.0  # 保留兼容，不再用位移强制 OCR（快移时画面糊，强制识别易把标签冲掉）
 
 # ---- 裁图后再送给 OCR ----
-CROP_EXPAND = 1.12       # YOLO 框再放大的倍数，避免字贴边被切掉；太大易带进背景
-MIN_CROP_SIDE = 48       # 裁图最短边小于此则放大（插值，远处糊字不会因此变清晰）
-MAX_CROP_SIDE = 960      # 裁图最长边上限，防止图太大把 CPU 卡死
+CROP_EXPAND = 1.12  # YOLO 框再放大的倍数，避免字贴边被切掉；太大易带进背景
+MIN_CROP_SIDE = 48  # 裁图最短边小于此则放大（插值，远处糊字不会因此变清晰）
+MAX_CROP_SIDE = 960  # 裁图最长边上限，防止图太大把 CPU 卡死
 
 # ---- PaddleOCR：先找字再认字 ----
-DET_THRESH = 0.3         # 文字检测像素阈值，越低越容易框到淡字，也更容易假框
-DET_BOX_THRESH = 0.6     # 文字框置信度，低于此丢掉
-DET_UNCLIP = 1.5         # 文字框外扩，笔画连在一起时可略加大
-REC_SCORE_THRESH = 0.5   # 单行识别分低于此丢掉；手写/远距离可降到 0.3，误识别也会变多
+DET_THRESH = 0.3  # 文字检测像素阈值，越低越容易框到淡字，也更容易假框
+DET_BOX_THRESH = 0.6  # 文字框置信度，低于此丢掉
+DET_UNCLIP = 1.5  # 文字框外扩，笔画连在一起时可略加大
+REC_SCORE_THRESH = 0.5  # 单行识别分低于此丢掉；手写/远距离可降到 0.3，误识别也会变多
 
 # ---- 框还在不在 / OCR 结果还在不在（两套独立计时）----
-TRACK_BUFFER = 150       # ByteTrack：跟丢后 ID 还活多少帧
-TRACK_MATCH_THRESH = 0.85 # ByteTrack 代价=1-IoU，越大越能跟上快移；近距串标由 OCR 绑定层拦截
-OCR_HOLD_FRAMES = 180    # 框消失后 OCR 名字再保留多少帧
-OCR_INHERIT_DIST = 140.0 # 预测位置匹配的最大距离（快移换 ID）
-OCR_INHERIT_GAP = 48.0   # 最近与次近差距不够则不继承，避免两瓶靠太近串标
-OCR_STICKY_DIST = 52.0   # 当前 ID 仍对准原瓶时优先粘住；交叉跳变时不粘，按预测位置改绑
+TRACK_BUFFER = 150  # ByteTrack：跟丢后 ID 还活多少帧
+TRACK_MATCH_THRESH = 0.85  # ByteTrack 代价=1-IoU，越大越能跟上快移；近距串标由 OCR 绑定层拦截
+OCR_HOLD_FRAMES = 180  # 框消失后 OCR 名字再保留多少帧
+OCR_INHERIT_DIST = 140.0  # 预测位置匹配的最大距离（快移换 ID）
+OCR_INHERIT_GAP = 48.0  # 最近与次近差距不够则不继承，避免两瓶靠太近串标
+OCR_STICKY_DIST = 52.0  # 当前 ID 仍对准原瓶时优先粘住；交叉跳变时不粘，按预测位置改绑
 
 REAGENT_LABELS = ("酒精", "无菌水", "次氯酸钠", "灭菌瓶", "培养基")
 REAGENT_ALIASES = {
@@ -289,7 +291,7 @@ def open_camera(camera_id: int) -> cv2.VideoCapture:
 
 
 def bottle_label(ocr_text: str) -> str:
-    """酒精瓶 / 无菌水瓶 / 次氯酸钠瓶 / 灭菌瓶 / 培养基；对不上仍显示「瓶子」。"""
+    """酒精瓶 / 无菌水瓶 / 次氯酸钠瓶 / 灭菌瓶 / 培养基；对不上仍显示「瓶子」。."""
     name = match_reagent_label(ocr_text)
     if not name:
         return OCR_CLASS
@@ -362,10 +364,7 @@ def main() -> None:
     class_names: dict[int, str] = model.names
     print(f"YOLO 类别: {class_names}")
     if OCR_CLASS not in class_names.values():
-        print(
-            f"警告: 模型类别里没有「{OCR_CLASS}」，不会触发 OCR。"
-            f"当前类别: {list(class_names.values())}"
-        )
+        print(f"警告: 模型类别里没有「{OCR_CLASS}」，不会触发 OCR。当前类别: {list(class_names.values())}")
 
     ocr = load_ocr()
     tracker = load_bytetrack(TRACK_BUFFER)
@@ -409,7 +408,12 @@ def main() -> None:
             last_seen[tid] = frame_id
             if class_names.get(det.cls_id, str(det.cls_id)) == OCR_CLASS:
                 bottle_obs.append(
-                    (tid, det.pts.mean(axis=0), float(max(det.xywh[2], det.xywh[3])), np.asarray(det.xyxy, dtype=np.float32))
+                    (
+                        tid,
+                        det.pts.mean(axis=0),
+                        float(max(det.xywh[2], det.xywh[3])),
+                        np.asarray(det.xyxy, dtype=np.float32),
+                    )
                 )
         for src, dst, lab in rebind_ocr_cache(
             ocr_cache,
@@ -434,7 +438,11 @@ def main() -> None:
 
             if cls_name == OCR_CLASS:
                 record = ocr_cache.get(tid)
-                if (tid not in close_ids) and (tid not in blocked_ids) and should_run_ocr(record, frame_id, do_ocr, OCR_RETRY, OCR_REFRESH):
+                if (
+                    (tid not in close_ids)
+                    and (tid not in blocked_ids)
+                    and should_run_ocr(record, frame_id, do_ocr, OCR_RETRY, OCR_REFRESH)
+                ):
                     expand = neighbor_crop_expand(center, size, bottle_obs, tid, CROP_EXPAND)
                     if det.pts is not None and det.pts.shape == (4, 2):
                         crop = crop_obb(orig, det.pts, expand=expand)
