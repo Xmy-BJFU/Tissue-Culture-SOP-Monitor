@@ -1,4 +1,4 @@
-"""瓶子 OCR 缓存与跟踪换 ID 时的标签绑定。
+"""瓶子 OCR 缓存与跟踪换 ID 时的标签绑定。.
 
 规则：
 - 未识别到标签：隔若干帧再检
@@ -10,6 +10,7 @@
 - 拿起丢框：仅当上一帧至少两瓶重叠、一只框消失、留下的框明显是另一只时才停放；
   单瓶移动或跟踪换 ID 时标签必须跟着走
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -110,7 +111,7 @@ def neighbor_crop_expand(
     tid: int,
     base_expand: float,
 ) -> float:
-    """两瓶过近时缩小裁图，避免把邻瓶文字读进来。"""
+    """两瓶过近时缩小裁图，避免把邻瓶文字读进来。."""
     center = np.asarray(center, dtype=np.float32).reshape(-1)[:2]
     min_d = 1e9
     for b in bottles:
@@ -133,7 +134,7 @@ def neighbor_label_conflict(
     ocr_cache: dict,
     bottles: list,
 ) -> bool:
-    """新识别结果与近邻瓶已有标签相同，且自身原本不是该标签：视为读串，丢弃本次结果。"""
+    """新识别结果与近邻瓶已有标签相同，且自身原本不是该标签：视为读串，丢弃本次结果。."""
     if not matched:
         return False
     own = None
@@ -203,7 +204,7 @@ def bottles_overlap(b1, b2) -> bool:
 
 
 def front_tid(b1, b2) -> int:
-    """桌面机位：更靠画面下方、或框更矮的视为前面遮挡瓶。"""
+    """桌面机位：更靠画面下方、或框更矮的视为前面遮挡瓶。."""
     t1, c1, s1, x1, h1 = unpack_bottle(b1)
     t2, c2, s2, x2, h2 = unpack_bottle(b2)
     if x1 is not None and x2 is not None:
@@ -290,7 +291,7 @@ def _park_record(ocr_cache: dict, parked: dict, rec, prefer_tid: int, frame_id: 
             ocr_cache.pop(k, None)
     rec.parked = True
     rec.parked_frame = int(frame_id)
-    rec.no_bind_tids = set(int(t) for t in no_bind)
+    rec.no_bind_tids = {int(t) for t in no_bind}
     pid = int(prefer_tid)
     while pid in parked:
         pid += 1
@@ -325,7 +326,7 @@ def expire_parked(parked: dict, frame_id: int, hold_frames: int) -> None:
 
 
 def follow_cost(rec, bottle, frame_id: int) -> float:
-    """标签跟到当前框的代价：位置为主，框高只作弱约束（倾斜时高度会变）。"""
+    """标签跟到当前框的代价：位置为主，框高只作弱约束（倾斜时高度会变）。."""
     _tid, center, _s, _x, h = unpack_bottle(bottle)
     pred = predicted_center(rec, frame_id)
     d = float(np.linalg.norm(center - pred))
@@ -343,7 +344,7 @@ def handle_pickup_loss(
     frame_id: int,
     moved: list,
 ) -> set[int]:
-    """仅两瓶重叠且一只真丢框、留下的明显是另一只时才停放。单瓶换 ID 直接跟着走。"""
+    """仅两瓶重叠且一只真丢框、留下的明显是另一只时才停放。单瓶换 ID 直接跟着走。."""
     parked: dict = bind_mem.setdefault("parked", {})
     prev = bind_mem.get("prev") or []
     if len(prev) < 2 or not bottles:
@@ -377,13 +378,12 @@ def handle_pickup_loss(
             scored.append((d, tid))
         scored.sort()
         limit = 2.2 * adaptive_max_dist(rec, 140.0)
-        if scored and scored[0][0] <= limit:
-            if len(scored) == 1 or scored[1][0] - scored[0][0] >= 18.0:
-                _move_label(ocr_cache, last_seen, moved, lt, scored[0][1], frame_id)
-                rec2 = ocr_cache.get(scored[0][1])
-                if rec2 is not None:
-                    rec2.parked = False
-                continue
+        if scored and scored[0][0] <= limit and (len(scored) == 1 or scored[1][0] - scored[0][0] >= 18.0):
+            _move_label(ocr_cache, last_seen, moved, lt, scored[0][1], frame_id)
+            rec2 = ocr_cache.get(scored[0][1])
+            if rec2 is not None:
+                rec2.parked = False
+            continue
 
         if not overlapped:
             continue
@@ -410,7 +410,7 @@ def try_unpark(
     if not parked or not bottles:
         return
     parsed = [unpack_bottle(b) for b in bottles]
-    det_h = {tid: h for tid, _c, _s, _x, h in parsed}
+    {tid: h for tid, _c, _s, _x, h in parsed}
     curr_tids = {tid for tid, _c, _s, _x, _h in parsed}
 
     def unlabeled(tid: int) -> bool:
@@ -512,7 +512,7 @@ def restore_occlusion_labels(
     frame_id: int,
     moved: list,
 ) -> tuple[set[int], dict[int, int]]:
-    """遮挡时：较矮/靠前的瓶不能占有高瓶已锁定标签；错绑则立刻搬回后瓶。"""
+    """遮挡时：较矮/靠前的瓶不能占有高瓶已锁定标签；错绑则立刻搬回后瓶。."""
     crowded, front_to_rear = occlusion_map(bottles)
     for front, rear in list(front_to_rear.items()):
         if front not in det_h or rear not in det_h:
@@ -593,9 +593,7 @@ def rebind_ocr_cache(
     if not bottles:
         return moved
 
-    crowded, _front_to_rear = restore_occlusion_labels(
-        ocr_cache, bottles, det_xy, det_h, last_seen, frame_id, moved
-    )
+    crowded, _front_to_rear = restore_occlusion_labels(ocr_cache, bottles, det_xy, det_h, last_seen, frame_id, moved)
     front_tids = set(_front_to_rear.keys())
 
     locked = {tid: rec for tid, rec in ocr_cache.items() if getattr(rec, "reagent", "")}
@@ -749,7 +747,7 @@ def assign_spatial_tids(
     next_tid: int,
     sticky: float = 110.0,
 ) -> tuple[list[int], int]:
-    """无 ByteTrack 时，按预测位置给瓶子分配稳定 id，避免网格跳动丢缓存。"""
+    """无 ByteTrack 时，按预测位置给瓶子分配稳定 id，避免网格跳动丢缓存。."""
     n = len(detections)
     tids = [0] * n
     used_old: set[int] = set()

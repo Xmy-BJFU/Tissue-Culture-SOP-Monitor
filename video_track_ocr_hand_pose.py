@@ -1,4 +1,4 @@
-"""实时监测：YOLO-OBB + ByteTrack + 瓶子 OCR + 手套 RTMPose + 动作规则。
+"""实时监测：YOLO-OBB + ByteTrack + 瓶子 OCR + 手套 RTMPose + 动作规则。.
 
 本文件独立运行，不依赖项目里其它 .py。
 画面上不叠检出率、漏检、抖动等统计字。
@@ -16,6 +16,7 @@
 
 按键: Q 退出  S 保存  H 切换戴手套/不戴手套  R 重置动作  空格暂停
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,6 +29,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+
 from ultralytics import YOLO
 from ultralytics.trackers.byte_tracker import BYTETracker
 from ultralytics.utils import YAML, IterableSimpleNamespace
@@ -82,8 +84,7 @@ OCR_INHERIT_GAP = 48.0
 OCR_STICKY_DIST = 52.0
 
 RTMDET_URL = (
-    "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/"
-    "rtmdet_nano_8xb32-300e_hand-267f9c8f.zip"
+    "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/rtmdet_nano_8xb32-300e_hand-267f9c8f.zip"
 )
 RTMPOSE_URL = (
     "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/"
@@ -153,20 +154,52 @@ SOAK_DUMP_MAX_REVERSALS = 1
 
 # MediaPipe 同款 21 点连线，避免再依赖 hand_mediapipe.py
 HAND_CONNECTIONS = (
-    (0, 1), (1, 2), (2, 3), (3, 4),
-    (0, 5), (5, 6), (6, 7), (7, 8),
-    (0, 9), (9, 10), (10, 11), (11, 12),
-    (0, 13), (13, 14), (14, 15), (15, 16),
-    (0, 17), (17, 18), (18, 19), (19, 20),
-    (5, 9), (9, 13), (13, 17),
+    (0, 1),
+    (1, 2),
+    (2, 3),
+    (3, 4),
+    (0, 5),
+    (5, 6),
+    (6, 7),
+    (7, 8),
+    (0, 9),
+    (9, 10),
+    (10, 11),
+    (11, 12),
+    (0, 13),
+    (13, 14),
+    (14, 15),
+    (15, 16),
+    (0, 17),
+    (17, 18),
+    (18, 19),
+    (19, 20),
+    (5, 9),
+    (9, 13),
+    (13, 17),
 )
 PALM_COLOR = (240, 240, 240)
 FINGER_COLORS = {
-    1: (40, 140, 255), 2: (40, 140, 255), 3: (40, 140, 255), 4: (40, 140, 255),
-    5: (0, 220, 80), 6: (0, 220, 80), 7: (0, 220, 80), 8: (0, 220, 80),
-    9: (0, 220, 255), 10: (0, 220, 255), 11: (0, 220, 255), 12: (0, 220, 255),
-    13: (220, 80, 255), 14: (220, 80, 255), 15: (220, 80, 255), 16: (220, 80, 255),
-    17: (0, 255, 255), 18: (0, 255, 255), 19: (0, 255, 255), 20: (0, 255, 255),
+    1: (40, 140, 255),
+    2: (40, 140, 255),
+    3: (40, 140, 255),
+    4: (40, 140, 255),
+    5: (0, 220, 80),
+    6: (0, 220, 80),
+    7: (0, 220, 80),
+    8: (0, 220, 80),
+    9: (0, 220, 255),
+    10: (0, 220, 255),
+    11: (0, 220, 255),
+    12: (0, 220, 255),
+    13: (220, 80, 255),
+    14: (220, 80, 255),
+    15: (220, 80, 255),
+    16: (220, 80, 255),
+    17: (0, 255, 255),
+    18: (0, 255, 255),
+    19: (0, 255, 255),
+    20: (0, 255, 255),
 }
 
 
@@ -526,7 +559,7 @@ def _build_rtm(device: str, det_thr: float) -> tuple[RTMDet, RTMPose]:
         backend="onnxruntime",
         device=device,
     )
-    providers = list(getattr(pose, "session").get_providers())
+    providers = list(pose.session.get_providers())
     print(f"RTMPose 设备 {device}  providers {providers}")
     return det, pose
 
@@ -604,7 +637,7 @@ def pose_on_boxes(pose: RTMPose, bgr: np.ndarray, bboxes: list[list[float]], pos
 
 
 def obb_tilt_from_vertical(pts: np.ndarray) -> float:
-    """长轴相对画面竖直方向的倾角，0=直立，90=横躺。"""
+    """长轴相对画面竖直方向的倾角，0=直立，90=横躺。."""
     pts = np.asarray(pts, dtype=np.float32).reshape(4, 2)
     e01 = pts[1] - pts[0]
     e12 = pts[2] - pts[1]
@@ -665,7 +698,7 @@ def hole_xyxy_from_sterilizer(xyxy: np.ndarray) -> np.ndarray:
     )
 
 
-def in_hole(item: "TrackedItem", hole: np.ndarray) -> bool:
+def in_hole(item: TrackedItem, hole: np.ndarray) -> bool:
     cx, cy = float(item.center[0]), float(item.center[1])
     if point_in_xyxy(cx, cy, hole):
         return True
@@ -698,7 +731,7 @@ def shrink_obb(pts: np.ndarray, scale: float) -> np.ndarray:
     return c + (pts - c) * float(scale)
 
 
-def hold_threshold(item: "TrackedItem") -> float:
+def hold_threshold(item: TrackedItem) -> float:
     w = float(item.det.xywh[2])
     h = float(item.det.xywh[3])
     short, long = min(w, h), max(w, h)
@@ -716,8 +749,7 @@ def hand_obj_hits(probes: list[tuple[float, float]], pts: np.ndarray, thr: float
     for x, y in probes:
         d = float(cv2.pointPolygonTest(contour, (float(x), float(y)), True))
         dist = 0.0 if d >= 0 else -d
-        if dist < best:
-            best = dist
+        best = min(best, dist)
         if dist <= thr:
             hits += 1
     return best, hits
@@ -756,7 +788,7 @@ class ActionView:
 
 
 class ActionEngine:
-    """手持 + 倾倒/倒出 + 四动作候选。不打分、不做拧盖。"""
+    """手持 + 倾倒/倒出 + 四动作候选。不打分、不做拧盖。."""
 
     def __init__(self) -> None:
         self.reset()
@@ -878,19 +910,16 @@ class ActionEngine:
             soak["late"] = False
             soak["verdict"] = "early"
             judge = f"偏早 {t:.1f}s < {soak['lo']:.0f}s"
-            level = "偏早"
         elif t > soak["hi"]:
             soak["early"] = False
             soak["late"] = True
             soak["verdict"] = "late"
             judge = f"超时 {t:.1f}s > {soak['hi']:.0f}s"
-            level = "超时"
         else:
             soak["early"] = False
             soak["late"] = False
             soak["verdict"] = "ok"
             judge = f"合格 {t:.1f}s（窗{soak['lo']:.0f}–{soak['hi']:.0f}s）"
-            level = "合格"
         self._fire(fired, f"计时 {name} {reason}停表 {judge}")
 
     def _tick_soaks(self, items: list[TrackedItem], fired: list[str]) -> None:
@@ -953,7 +982,11 @@ class ActionEngine:
 
         hold_steps = [
             {"label": "手部关键点", "value": f"{self.n_hands} 只手", "ok": self.n_hands > 0},
-            {"label": "防抖", "value": f"贴紧{HOLD_ON_FRAMES}帧才算握住，离开{HOLD_OFF_FRAMES}帧才松开", "ok": bool(held)},
+            {
+                "label": "防抖",
+                "value": f"贴紧{HOLD_ON_FRAMES}帧才算握住，离开{HOLD_OFF_FRAMES}帧才松开",
+                "ok": bool(held),
+            },
             {"label": "当前手持", "value": "、".join(it.name for it in held) or "无", "ok": bool(held)},
             {
                 "label": "距离规则",
@@ -967,19 +1000,49 @@ class ActionEngine:
             {"label": "灭菌器", "value": "已检出" if sterilizers else "未检出", "ok": bool(sterilizers)},
             {"label": "孔区", "value": "顶部32%且左右内缩18%" if hole is not None else "无", "ok": hole is not None},
             {"label": "开场已插入", "value": "前90帧在孔内也算，不必先拔出", "ok": in_opening},
-            {"label": "镊子入孔", "value": f"{tw_n}/{IN_HOLE_FRAMES} 帧  " + ("完成" if self.tweezers_ok else "进行中" if tw_n else "未入"), "ok": self.tweezers_ok},
-            {"label": "美工刀入孔", "value": f"{kn_n}/{IN_HOLE_FRAMES} 帧  " + ("完成" if self.knife_ok else "进行中" if kn_n else "未入"), "ok": self.knife_ok},
+            {
+                "label": "镊子入孔",
+                "value": f"{tw_n}/{IN_HOLE_FRAMES} 帧  "
+                + ("完成" if self.tweezers_ok else "进行中" if tw_n else "未入"),
+                "ok": self.tweezers_ok,
+            },
+            {
+                "label": "美工刀入孔",
+                "value": f"{kn_n}/{IN_HOLE_FRAMES} 帧  " + ("完成" if self.knife_ok else "进行中" if kn_n else "未入"),
+                "ok": self.knife_ok,
+            },
             {"label": "步骤1", "value": "镊子+美工刀都完成才算灭菌完成", "ok": self.step1_ok},
         ]
         pour_it = next((it for it in reagents if self.pouring[it.tid]), None)
         if pour_it is None and reagents:
             pour_it = max(reagents, key=lambda it: it.tilt, default=None)
         pour_steps = [
-            {"label": "试剂瓶OCR", "value": "、".join(f"{it.role} {it.tilt:.0f}°" for it in reagents) or "未锁定酒精/无菌水/次氯酸钠", "ok": bool(reagents)},
-            {"label": "倾倒阈值", "value": f"手持且倾角≥{POUR_TILT_DEG:.0f}°，连续{POUR_ON_FRAMES}帧", "ok": bool(self.live_pour)},
-            {"label": "回正阈值", "value": f"倾角≤{POUR_UPRIGHT_DEG:.0f}°，连续{POUR_OFF_FRAMES}帧 → 计时零点", "ok": bool(self.last_pour)},
-            {"label": "当前", "value": self.live_pour or (f"最近 {self.last_pour} ×{self.pour_done_n[self.last_pour]}" if self.last_pour else "未倾倒"), "ok": bool(self.live_pour or self.last_pour)},
-            {"label": "对准灭菌瓶", "value": "近距或灭菌瓶在试剂瓶下方才标注→灭菌瓶", "ok": any(self._near_sterile(it, items) for it in reagents) if reagents else False},
+            {
+                "label": "试剂瓶OCR",
+                "value": "、".join(f"{it.role} {it.tilt:.0f}°" for it in reagents) or "未锁定酒精/无菌水/次氯酸钠",
+                "ok": bool(reagents),
+            },
+            {
+                "label": "倾倒阈值",
+                "value": f"手持且倾角≥{POUR_TILT_DEG:.0f}°，连续{POUR_ON_FRAMES}帧",
+                "ok": bool(self.live_pour),
+            },
+            {
+                "label": "回正阈值",
+                "value": f"倾角≤{POUR_UPRIGHT_DEG:.0f}°，连续{POUR_OFF_FRAMES}帧 → 计时零点",
+                "ok": bool(self.last_pour),
+            },
+            {
+                "label": "当前",
+                "value": self.live_pour
+                or (f"最近 {self.last_pour} ×{self.pour_done_n[self.last_pour]}" if self.last_pour else "未倾倒"),
+                "ok": bool(self.live_pour or self.last_pour),
+            },
+            {
+                "label": "对准灭菌瓶",
+                "value": "近距或灭菌瓶在试剂瓶下方才标注→灭菌瓶",
+                "ok": any(self._near_sterile(it, items) for it in reagents) if reagents else False,
+            },
         ]
         soak_steps = []
         soak_state = "idle"
@@ -1019,20 +1082,42 @@ class ActionEngine:
         )
         dump_steps = [
             {"label": "灭菌瓶OCR", "value": f"{len(steriles)} 个", "ok": bool(steriles)},
-            {"label": "倒出=停表", "value": f"手持灭菌瓶，倾角连续≥{SOAK_DUMP_TILT:.0f}° 满{SOAK_DUMP_FRAMES}帧，换向≤{SOAK_DUMP_MAX_REVERSALS}次（摇晃会换向，倒出是稳住大倾角）", "ok": self.live_dump or self.dump_n > 0},
+            {
+                "label": "倒出=停表",
+                "value": f"手持灭菌瓶，倾角连续≥{SOAK_DUMP_TILT:.0f}° 满{SOAK_DUMP_FRAMES}帧，换向≤{SOAK_DUMP_MAX_REVERSALS}次（摇晃会换向，倒出是稳住大倾角）",
+                "ok": self.live_dump or self.dump_n > 0,
+            },
             {"label": "当前", "value": "倒出中" if self.live_dump else "待命", "ok": self.live_dump},
         ]
-        shake_tid = next((it.tid for it in steriles if it.tid in self.holding), None)
+        next((it.tid for it in steriles if it.tid in self.holding), None)
         shake_steps = [
             {"label": "前置", "value": "必须手持灭菌瓶；次氯酸钠倒完后才计分", "ok": self.naocl_poured},
-            {"label": "角度", "value": f"近{SHAKE_WINDOW}帧极差≥{SHAKE_MIN_RANGE:.0f}° 且标准差≥{SHAKE_ANGLE_STD:.1f}°，至少2次换向", "ok": self.shake_scored or self.shake_unscored},
+            {
+                "label": "角度",
+                "value": f"近{SHAKE_WINDOW}帧极差≥{SHAKE_MIN_RANGE:.0f}° 且标准差≥{SHAKE_ANGLE_STD:.1f}°，至少2次换向",
+                "ok": self.shake_scored or self.shake_unscored,
+            },
             {"label": "位移上限", "value": f"中心跨度<{SHAKE_MAX_SHIFT:.0f}px（太大算搬走不是摇）", "ok": True},
             {"label": "连续", "value": f"{SHAKE_ON_FRAMES}帧满足才锁定", "ok": self.shake_scored},
-            {"label": "当前", "value": self.live_shake or ("计分已检出" if self.shake_scored else ("不计分已检出" if self.shake_unscored else "未检出")), "ok": self.shake_scored, "warn": self.shake_unscored and not self.shake_scored},
+            {
+                "label": "当前",
+                "value": self.live_shake
+                or ("计分已检出" if self.shake_scored else ("不计分已检出" if self.shake_unscored else "未检出")),
+                "ok": self.shake_scored,
+                "warn": self.shake_unscored and not self.shake_scored,
+            },
         ]
         cut_steps = [
-            {"label": "手持美工刀", "value": "是" if knives and knives[0].tid in self.holding else "否", "ok": bool(knives and knives[0].tid in self.holding)},
-            {"label": "刀心跨度", "value": f"{self.cut_span:.0f}/{CUT_SPAN_PX:.0f}px（近{CUT_WINDOW}帧）", "ok": self.cut_span >= CUT_SPAN_PX},
+            {
+                "label": "手持美工刀",
+                "value": "是" if knives and knives[0].tid in self.holding else "否",
+                "ok": bool(knives and knives[0].tid in self.holding),
+            },
+            {
+                "label": "刀心跨度",
+                "value": f"{self.cut_span:.0f}/{CUT_SPAN_PX:.0f}px（近{CUT_WINDOW}帧）",
+                "ok": self.cut_span >= CUT_SPAN_PX,
+            },
             {"label": "连续帧", "value": f"{self.cut_n}/{CUT_HOLD_FRAMES}", "ok": self.cutting_ok},
         ]
         stems = [it for it in items if it.cls_name == "鳞茎"] or [it for it in items if it.cls_name in BULB_CLASSES]
@@ -1041,19 +1126,60 @@ class ActionEngine:
             {"label": "鳞茎/种球", "value": "已检出" if stems else "等待检测类", "ok": bool(stems)},
             {"label": "培养基", "value": "已检出" if media else "等待检测类或OCR", "ok": bool(media)},
             {"label": "重叠", "value": f"IoU≥{INSERT_IOU}", "ok": self.insert_ok},
-            {"label": "夹角", "value": f"合格{INSERT_ANGLE_OK[0]:.0f}–{INSERT_ANGLE_OK[1]:.0f}°", "ok": self.insert_angle_ok},
+            {
+                "label": "夹角",
+                "value": f"合格{INSERT_ANGLE_OK[0]:.0f}–{INSERT_ANGLE_OK[1]:.0f}°",
+                "ok": self.insert_angle_ok,
+            },
         ]
         return [
-            self._trace_group("hold", "手持", "、".join(it.name for it in held) or "未持物", "on" if held else "idle", hold_steps),
-            self._trace_group("sterile", "灭菌", "步骤1完成" if self.step1_ok else "镊子/美工刀入孔", "ok" if self.step1_ok else ("on" if self.tweezers_ok or self.knife_ok else "idle"), sterile_steps),
-            self._trace_group("pour", "倾倒", self.live_pour or (self.last_pour or "待命"), "on" if self.live_pour else ("ok" if self.last_pour else "idle"), pour_steps),
+            self._trace_group(
+                "hold", "手持", "、".join(it.name for it in held) or "未持物", "on" if held else "idle", hold_steps
+            ),
+            self._trace_group(
+                "sterile",
+                "灭菌",
+                "步骤1完成" if self.step1_ok else "镊子/美工刀入孔",
+                "ok" if self.step1_ok else ("on" if self.tweezers_ok or self.knife_ok else "idle"),
+                sterile_steps,
+            ),
+            self._trace_group(
+                "pour",
+                "倾倒",
+                self.live_pour or (self.last_pour or "待命"),
+                "on" if self.live_pour else ("ok" if self.last_pour else "idle"),
+                pour_steps,
+            ),
             self._trace_group("soak", "浸泡计时", soak_summary, soak_state if soak_state != "ok" else "ok", soak_steps),
-            self._trace_group("dump", "倒出", f"累计{self.dump_n}次", "on" if self.live_dump else ("ok" if self.dump_n else "idle"), dump_steps),
-            self._trace_group("shake", "摇晃", self.live_shake or ("计分" if self.shake_scored else "未检出"), "ok" if self.shake_scored else ("warn" if self.shake_unscored else "idle"), shake_steps),
-            self._trace_group("cut", "切割", "已检出" if self.cutting_ok else f"跨度{self.cut_span:.0f}px", "ok" if self.cutting_ok else "idle", cut_steps),
-            self._trace_group("insert", "斜插", "已发生" if self.insert_ok else "等待鳞茎/培养基", "ok" if self.insert_angle_ok else ("on" if self.insert_ok else "idle"), insert_steps),
+            self._trace_group(
+                "dump",
+                "倒出",
+                f"累计{self.dump_n}次",
+                "on" if self.live_dump else ("ok" if self.dump_n else "idle"),
+                dump_steps,
+            ),
+            self._trace_group(
+                "shake",
+                "摇晃",
+                self.live_shake or ("计分" if self.shake_scored else "未检出"),
+                "ok" if self.shake_scored else ("warn" if self.shake_unscored else "idle"),
+                shake_steps,
+            ),
+            self._trace_group(
+                "cut",
+                "切割",
+                "已检出" if self.cutting_ok else f"跨度{self.cut_span:.0f}px",
+                "ok" if self.cutting_ok else "idle",
+                cut_steps,
+            ),
+            self._trace_group(
+                "insert",
+                "斜插",
+                "已发生" if self.insert_ok else "等待鳞茎/培养基",
+                "ok" if self.insert_angle_ok else ("on" if self.insert_ok else "idle"),
+                insert_steps,
+            ),
         ]
-
 
     def _fire(self, fired: list[str], msg: str) -> None:
         fired.append(msg)
@@ -1121,7 +1247,7 @@ class ActionEngine:
         return int(np.sum((d[1:] * d[:-1]) < 0)) >= 2
 
     def _dump_progress(self, it: TrackedItem) -> tuple[int, bool]:
-        """摇晃是倾角来回换向；倒出是灭菌瓶持续保持大倾角。返回 (已连续高倾角帧数, 是否判定为倒出停表)。"""
+        """摇晃是倾角来回换向；倒出是灭菌瓶持续保持大倾角。返回 (已连续高倾角帧数, 是否判定为倒出停表)。."""
         if it.tid not in self.holding:
             return 0, False
         ang = np.array(self.angles.get(it.tid, []), dtype=np.float32)
@@ -1462,7 +1588,12 @@ def main() -> None:
             last_seen[tid] = frame_id
             if class_names.get(det.cls_id, str(det.cls_id)) == OCR_CLASS:
                 bottle_obs.append(
-                    (tid, det.pts.mean(axis=0), float(max(det.xywh[2], det.xywh[3])), np.asarray(det.xyxy, dtype=np.float32))
+                    (
+                        tid,
+                        det.pts.mean(axis=0),
+                        float(max(det.xywh[2], det.xywh[3])),
+                        np.asarray(det.xyxy, dtype=np.float32),
+                    )
                 )
         for src, dst, lab in rebind_ocr_cache(
             ocr_cache,
@@ -1492,7 +1623,11 @@ def main() -> None:
             if cls_name == OCR_CLASS:
                 record = ocr_cache.get(tid)
                 crowded = tid in close_ids
-                if (not crowded) and (tid not in blocked_ids) and should_run_ocr(record, frame_id, do_ocr, OCR_RETRY, OCR_REFRESH):
+                if (
+                    (not crowded)
+                    and (tid not in blocked_ids)
+                    and should_run_ocr(record, frame_id, do_ocr, OCR_RETRY, OCR_REFRESH)
+                ):
                     expand = neighbor_crop_expand(center, size, bottle_obs, tid, CROP_EXPAND)
                     if det.pts is not None and det.pts.shape == (4, 2):
                         crop = crop_obb(orig, det.pts, expand=expand)
@@ -1547,11 +1682,7 @@ def main() -> None:
                 ocr_cache.pop(cache_tid, None)
                 last_seen.pop(cache_tid, None)
 
-        pose_boxes = (
-            glove_boxes_from_yolo(gloves, orig.shape)
-            if hand_mode == "glove"
-            else boxes_to_list(rtm_det(orig))
-        )
+        pose_boxes = glove_boxes_from_yolo(gloves, orig.shape) if hand_mode == "glove" else boxes_to_list(rtm_det(orig))
         hands = pose_on_boxes(pose, orig, pose_boxes, args.pose_conf)
         view = engine.update(frame_id, items, hands, class_names)
 

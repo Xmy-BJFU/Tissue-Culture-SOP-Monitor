@@ -24,7 +24,7 @@ function renderSOP(sop) {
     <li class="${s.state}">
       <i class="dot"></i>
       <div><b>${String(i + 1).padStart(2, "0")} ${s.title}</b><small>${s.hint}</small></div>
-    </li>`
+    </li>`,
     )
     .join("");
 }
@@ -36,8 +36,10 @@ function renderTimers(soaks) {
       const t = soaks[n] || { elapsed: 0, target: 1, progress: 0, remain: 0, running: false, done: false };
       const verdict = t.verdict === "ok" ? "合格" : t.verdict === "early" ? "偏早" : t.verdict === "late" ? "超时" : "";
       const label = t.running ? "计时中" : t.done ? verdict || "完成" : "待命";
-      const cls = t.verdict === "ok" ? "ok" : t.verdict === "early" || t.verdict === "late" ? "warn" : t.running ? "on" : "";
-      const win = t.window || t.lo ? `窗 ${t.window || `${Math.round(t.lo)}–${Math.round(t.hi)}s`}` : `目标 ${fmtTime(t.target)}`;
+      const cls =
+        t.verdict === "ok" ? "ok" : t.verdict === "early" || t.verdict === "late" ? "warn" : t.running ? "on" : "";
+      const win =
+        t.window || t.lo ? `窗 ${t.window || `${Math.round(t.lo)}–${Math.round(t.hi)}s`}` : `目标 ${fmtTime(t.target)}`;
       const shift = t.running || t.done ? ` 倒出 ${t.dump_hold || 0}/${t.dump_need || 8}帧` : "";
       return `<div class="timer ${cls}">
         <div>${n}</div><div>${fmtTime(t.elapsed)} / ${fmtTime(t.target)} · ${label}</div>
@@ -69,17 +71,37 @@ function renderActions(flags, trace) {
     return;
   }
   const items = [
-    ["灭菌", flags.step1_ok ? "完成" : flags.tweezers_ok || flags.knife_ok ? "进行中" : "未检出", flags.step1_ok, false],
-    ["倾倒", flags.live_pour || (flags.last_pour ? `最近 ${flags.last_pour}` : "待命"), Boolean(flags.live_pour), false],
+    [
+      "灭菌",
+      flags.step1_ok ? "完成" : flags.tweezers_ok || flags.knife_ok ? "进行中" : "未检出",
+      flags.step1_ok,
+      false,
+    ],
+    [
+      "倾倒",
+      flags.live_pour || (flags.last_pour ? `最近 ${flags.last_pour}` : "待命"),
+      Boolean(flags.live_pour),
+      false,
+    ],
     ["倒出", flags.live_dump ? "进行中" : `累计 ${flags.dump_n || 0} 次`, Boolean(flags.live_dump), false],
-    ["摇晃", flags.live_shake || (flags.shake_scored ? "计分已检出" : flags.shake_unscored ? "不计分已检出" : "未检出"), flags.shake_scored, flags.shake_unscored && !flags.shake_scored],
+    [
+      "摇晃",
+      flags.live_shake || (flags.shake_scored ? "计分已检出" : flags.shake_unscored ? "不计分已检出" : "未检出"),
+      flags.shake_scored,
+      flags.shake_unscored && !flags.shake_scored,
+    ],
     ["切割", flags.cutting_ok ? "已检出" : "未检出", flags.cutting_ok, false],
-    ["斜插", flags.insert_ok ? (flags.insert_angle_ok ? "发生且角度合格" : "已发生") : "等待鳞茎/培养基", flags.insert_ok, false],
+    [
+      "斜插",
+      flags.insert_ok ? (flags.insert_angle_ok ? "发生且角度合格" : "已发生") : "等待鳞茎/培养基",
+      flags.insert_ok,
+      false,
+    ],
   ];
   $("#actions").innerHTML = items
     .map(
       ([n, st, on, warn]) =>
-        `<div class="act ${on ? "on" : ""} ${warn ? "warn" : ""}"><span>${n}</span><span class="st">${st}</span></div>`
+        `<div class="act ${on ? "on" : ""} ${warn ? "warn" : ""}"><span>${n}</span><span class="st">${st}</span></div>`,
     )
     .join("");
 }
@@ -95,20 +117,14 @@ function renderObjs(objs, holding) {
   $("#holding").textContent = holding.length ? holding.join("、") : "—";
   $("#objBody").innerHTML = (objs || [])
     .slice(0, 12)
-    .map(
-      (o) =>
-        `<tr><td>${o.tid}</td><td>${o.name}</td><td>${o.tilt}°</td><td>${o.holding ? "持" : "—"}</td></tr>`
-    )
+    .map((o) => `<tr><td>${o.tid}</td><td>${o.name}</td><td>${o.tilt}°</td><td>${o.holding ? "持" : "—"}</td></tr>`)
     .join("");
 }
 
 function renderScore(score) {
   $("#totalScore").textContent = (score.total ?? 0).toFixed(1);
   $("#dims").innerHTML = (score.dims || [])
-    .map(
-      (d) =>
-        `<div class="dim"><div>${d.name}</div><b>${d.score}</b> / ${d.weight}<small>${d.detail}</small></div>`
-    )
+    .map((d) => `<div class="dim"><div>${d.name}</div><b>${d.score}</b> / ${d.weight}<small>${d.detail}</small></div>`)
     .join("");
 }
 
