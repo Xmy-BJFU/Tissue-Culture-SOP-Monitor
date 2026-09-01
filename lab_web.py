@@ -1,10 +1,11 @@
-"""启动朱顶红无菌实训评估台。
+"""启动朱顶红无菌实训评估台。.
 
 用法（在 yolov26 环境中）:
     python lab_web.py
     python lab_web.py --port 7861
     浏览器打开提示的地址
 """
+
 from __future__ import annotations
 
 import argparse

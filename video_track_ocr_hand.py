@@ -1,4 +1,4 @@
-"""实时监测：YOLO-OBB + ByteTrack + 瓶子 OCR + 手套 RTMPose 21 点。
+"""实时监测：YOLO-OBB + ByteTrack + 瓶子 OCR + 手套 RTMPose 21 点。.
 
 本文件独立运行，不依赖项目里其它 .py。
 画面上不叠检出率、漏检、抖动等统计字。
@@ -10,6 +10,7 @@
 
 按键: Q 退出  S 保存  M 切换手套框来源  空格暂停
 """
+
 from __future__ import annotations
 
 import argparse
@@ -20,6 +21,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+
 from ultralytics import YOLO
 from ultralytics.trackers.byte_tracker import BYTETracker
 from ultralytics.utils import YAML, IterableSimpleNamespace
@@ -74,8 +76,7 @@ OCR_INHERIT_GAP = 48.0
 OCR_STICKY_DIST = 52.0
 
 RTMDET_URL = (
-    "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/"
-    "rtmdet_nano_8xb32-300e_hand-267f9c8f.zip"
+    "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/rtmdet_nano_8xb32-300e_hand-267f9c8f.zip"
 )
 RTMPOSE_URL = (
     "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/"
@@ -100,20 +101,52 @@ REAGENT_CHAR_WEIGHTS = {
 
 # MediaPipe 同款 21 点连线，避免再依赖 hand_mediapipe.py
 HAND_CONNECTIONS = (
-    (0, 1), (1, 2), (2, 3), (3, 4),
-    (0, 5), (5, 6), (6, 7), (7, 8),
-    (0, 9), (9, 10), (10, 11), (11, 12),
-    (0, 13), (13, 14), (14, 15), (15, 16),
-    (0, 17), (17, 18), (18, 19), (19, 20),
-    (5, 9), (9, 13), (13, 17),
+    (0, 1),
+    (1, 2),
+    (2, 3),
+    (3, 4),
+    (0, 5),
+    (5, 6),
+    (6, 7),
+    (7, 8),
+    (0, 9),
+    (9, 10),
+    (10, 11),
+    (11, 12),
+    (0, 13),
+    (13, 14),
+    (14, 15),
+    (15, 16),
+    (0, 17),
+    (17, 18),
+    (18, 19),
+    (19, 20),
+    (5, 9),
+    (9, 13),
+    (13, 17),
 )
 PALM_COLOR = (240, 240, 240)
 FINGER_COLORS = {
-    1: (40, 140, 255), 2: (40, 140, 255), 3: (40, 140, 255), 4: (40, 140, 255),
-    5: (0, 220, 80), 6: (0, 220, 80), 7: (0, 220, 80), 8: (0, 220, 80),
-    9: (0, 220, 255), 10: (0, 220, 255), 11: (0, 220, 255), 12: (0, 220, 255),
-    13: (220, 80, 255), 14: (220, 80, 255), 15: (220, 80, 255), 16: (220, 80, 255),
-    17: (0, 255, 255), 18: (0, 255, 255), 19: (0, 255, 255), 20: (0, 255, 255),
+    1: (40, 140, 255),
+    2: (40, 140, 255),
+    3: (40, 140, 255),
+    4: (40, 140, 255),
+    5: (0, 220, 80),
+    6: (0, 220, 80),
+    7: (0, 220, 80),
+    8: (0, 220, 80),
+    9: (0, 220, 255),
+    10: (0, 220, 255),
+    11: (0, 220, 255),
+    12: (0, 220, 255),
+    13: (220, 80, 255),
+    14: (220, 80, 255),
+    15: (220, 80, 255),
+    16: (220, 80, 255),
+    17: (0, 255, 255),
+    18: (0, 255, 255),
+    19: (0, 255, 255),
+    20: (0, 255, 255),
 }
 
 
@@ -473,7 +506,7 @@ def _build_rtm(device: str, det_thr: float) -> tuple[RTMDet, RTMPose]:
         backend="onnxruntime",
         device=device,
     )
-    providers = list(getattr(pose, "session").get_providers())
+    providers = list(pose.session.get_providers())
     print(f"RTMPose 设备 {device}  providers {providers}")
     return det, pose
 
@@ -635,7 +668,12 @@ def main() -> None:
             last_seen[tid] = frame_id
             if class_names.get(det.cls_id, str(det.cls_id)) == OCR_CLASS:
                 bottle_obs.append(
-                    (tid, det.pts.mean(axis=0), float(max(det.xywh[2], det.xywh[3])), np.asarray(det.xyxy, dtype=np.float32))
+                    (
+                        tid,
+                        det.pts.mean(axis=0),
+                        float(max(det.xywh[2], det.xywh[3])),
+                        np.asarray(det.xyxy, dtype=np.float32),
+                    )
                 )
         for src, dst, lab in rebind_ocr_cache(
             ocr_cache,
@@ -663,7 +701,11 @@ def main() -> None:
 
             if cls_name == OCR_CLASS:
                 record = ocr_cache.get(tid)
-                if (tid not in close_ids) and (tid not in blocked_ids) and should_run_ocr(record, frame_id, do_ocr, OCR_RETRY, OCR_REFRESH):
+                if (
+                    (tid not in close_ids)
+                    and (tid not in blocked_ids)
+                    and should_run_ocr(record, frame_id, do_ocr, OCR_RETRY, OCR_REFRESH)
+                ):
                     expand = neighbor_crop_expand(center, size, bottle_obs, tid, CROP_EXPAND)
                     if det.pts is not None and det.pts.shape == (4, 2):
                         crop = crop_obb(orig, det.pts, expand=expand)

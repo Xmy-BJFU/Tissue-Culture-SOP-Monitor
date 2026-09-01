@@ -1,4 +1,4 @@
-"""手部关键点验证：YOLO 手套框 + MediaPipe 21 点。
+"""手部关键点验证：YOLO 手套框 + MediaPipe 21 点。.
 
 用来现场看三件事：
   1. 戴塑胶手套时点稳不稳、会不会整只手丢检
@@ -15,6 +15,7 @@
 
 按键: Q 退出  S 保存  M 切换 ROI/整帧  C 切换肤色适配  空格暂停
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,6 +29,7 @@ import cv2
 import numpy as np
 from PIL import Image as PILImage
 from PIL import ImageDraw, ImageFont
+
 from ultralytics import YOLO
 
 try:
@@ -36,10 +38,7 @@ try:
     from mediapipe.tasks.python.vision import HandLandmarker, HandLandmarkerOptions, HandLandmarksConnections
     from mediapipe.tasks.python.vision.core.vision_task_running_mode import VisionTaskRunningMode
 except ImportError as exc:
-    raise SystemExit(
-        "未安装 mediapipe。请先在 yolov26 环境执行:\n"
-        "    pip install mediapipe"
-    ) from exc
+    raise SystemExit("未安装 mediapipe。请先在 yolov26 环境执行:\n    pip install mediapipe") from exc
 
 
 ROOT = Path(__file__).resolve().parent
@@ -135,7 +134,7 @@ def _is_ascii_path(path: Path) -> bool:
 
 
 def ensure_mp_model(path: Path) -> Path:
-    """保证模型存在，并返回 MediaPipe 能打开的纯英文路径。"""
+    """保证模型存在，并返回 MediaPipe 能打开的纯英文路径。."""
     ascii_path = path if _is_ascii_path(path) else DEFAULT_MP_MODEL
     local_copy = ROOT / "weights" / "hand_landmarker.task"
     for candidate in (path, ascii_path, local_copy):
@@ -155,12 +154,10 @@ def ensure_mp_model(path: Path) -> Path:
             if ascii_path.exists() and ascii_path.stat().st_size > 1_000_000:
                 print(f"已保存 {ascii_path}  ({ascii_path.stat().st_size / 1e6:.1f} MB)")
                 return ascii_path
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             last_err = exc
             print(f"下载失败: {exc}")
-    raise FileNotFoundError(
-        f"拿不到 hand_landmarker.task。请手动下载后放到:\n  {ascii_path}\n最后错误: {last_err}"
-    )
+    raise FileNotFoundError(f"拿不到 hand_landmarker.task。请手动下载后放到:\n  {ascii_path}\n最后错误: {last_err}")
 
 
 def open_source(source: str) -> tuple[cv2.VideoCapture, bool]:
@@ -197,7 +194,7 @@ def expand_xyxy(xyxy: np.ndarray, shape: tuple[int, ...], expand: float) -> tupl
 
 
 def _lab_to_skin(bgr: np.ndarray, target_a: float = 148.0, target_b: float = 142.0, mix: float = 0.78) -> np.ndarray:
-    """保留亮度/皱褶，把色度拉向肤色。整块 ROI 都会变，背景也会偏肉色。"""
+    """保留亮度/皱褶，把色度拉向肤色。整块 ROI 都会变，背景也会偏肉色。."""
     lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB).astype(np.float32)
     L, A, B = cv2.split(lab)
     A = A * (1.0 - mix) + target_a * mix
@@ -216,7 +213,7 @@ def _hsv_recolor(bgr: np.ndarray, hue: int, sat_lo: int, sat_hi: int) -> np.ndar
 
 
 def adapt_glove_crop(bgr: np.ndarray, mode: str) -> np.ndarray:
-    """把手套裁图改成 MediaPipe 更熟的「裸手」外观。纹理尽量保留。"""
+    """把手套裁图改成 MediaPipe 更熟的「裸手」外观。纹理尽量保留。."""
     if mode in ("off", "try") or bgr.size == 0:
         return bgr
     sharp = cv2.addWeighted(bgr, 1.25, cv2.GaussianBlur(bgr, (0, 0), 1.2), -0.25, 0)
@@ -230,7 +227,7 @@ def adapt_glove_crop(bgr: np.ndarray, mode: str) -> np.ndarray:
 
 
 def mp_detect_crop(landmarker, crop: np.ndarray, mode: str):
-    """返回 (result, 实际送进 MP 的图, 用上的适配名)。try 会依次试几种外观。"""
+    """返回 (result, 实际送进 MP 的图, 用上的适配名)。try 会依次试几种外观。."""
     order = ("lab", "blue", "white", "off") if mode == "try" else (mode,)
     last_img = crop
     last_res = None
@@ -246,7 +243,7 @@ def mp_detect_crop(landmarker, crop: np.ndarray, mode: str):
 
 
 def prepare_crop(bgr: np.ndarray) -> tuple[np.ndarray, float]:
-    """缩放到 MediaPipe 较稳的边长，返回 (图, 相对原裁切的缩放)。"""
+    """缩放到 MediaPipe 较稳的边长，返回 (图, 相对原裁切的缩放)。."""
     h, w = bgr.shape[:2]
     scale = 1.0
     short, long = min(h, w), max(h, w)
@@ -341,7 +338,7 @@ def draw_obb(img: np.ndarray, pts: np.ndarray, color: tuple[int, int, int], text
 
 
 def parse_yolo(result) -> list[tuple[str, float, np.ndarray, np.ndarray]]:
-    """[(cls_name, conf, xyxy, obb_pts), ...]"""
+    """[(cls_name, conf, xyxy, obb_pts), ...]."""
     names = result.names
     out: list[tuple[str, float, np.ndarray, np.ndarray]] = []
     if result.obb is not None and len(result.obb):
