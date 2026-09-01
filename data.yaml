@@ -1,0 +1,12 @@
+path: E:\XMY\data\1
+train: images/train
+val: images/val
+
+nc: 5
+
+names:
+  0: 瓶子
+  1: 镊子
+  2: 美工刀
+  3: 手套
+  4: 灭菌器

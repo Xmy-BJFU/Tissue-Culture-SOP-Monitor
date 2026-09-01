@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>朱顶红无菌实训评估台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css?v=6" />
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">SL</div>
+      <div>
+        <div class="brand-kicker">STERILE LAB OS · VISION EVAL</div>
+        <h1>朱顶红无菌体系建立 · 实训评估台</h1>
+      </div>
+    </div>
+    <div class="top-metrics">
+      <div class="metric"><span>会话</span><b id="sessionId">—</b></div>
+      <div class="metric"><span>时长</span><b id="elapsed">00:00</b></div>
+      <div class="metric"><span>FPS</span><b id="fps">0.0</b></div>
+      <div class="metric"><span>帧</span><b id="frameId">0</b></div>
+    </div>
+    <div class="top-actions">
+      <span class="live-pill" id="livePill">STANDBY</span>
+      <button class="btn ghost" id="btnLoad">加载模型</button>
+      <button class="btn primary" id="btnStart">开始实训</button>
+      <button class="btn" id="btnPause">暂停</button>
+      <button class="btn" id="btnStop">停止</button>
+      <button class="btn" id="btnSnap">截图</button>
+      <button class="btn" id="btnReset">重置动作</button>
+      <button class="btn" id="btnReport">导出报告</button>
+      <button class="btn" id="btnSettings">设置</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="col left">
+      <section class="card">
+        <div class="card-h">
+          <h2>SOP 流程</h2>
+          <span class="chip" id="sopProgress">0/8</span>
+        </div>
+        <ol class="sop" id="sopList"></ol>
+      </section>
+
+      <section class="card">
+        <div class="card-h"><h2>浸泡计时</h2><span class="hint">倒完回正起算 · 倒出液体停表 · ±10%</span></div>
+        <div class="timers" id="timers"></div>
+        <div class="rinse">无菌水冲洗轮次 <b id="rinseCount">0</b> / 3</div>
+      </section>
+
+      <section class="card">
+        <div class="card-h"><h2>防护检查</h2></div>
+        <div class="ppe" id="ppe"></div>
+      </section>
+    </aside>
+
+    <section class="col center">
+      <div class="stage card">
+        <div class="stage-h">
+          <div>
+            <h2>实时视场</h2>
+            <p class="hint">侧面机位 · OBB + OCR + 跟踪 + 手部关键点 + 动作规则</p>
+          </div>
+          <div class="toggles" id="overlayToggles">
+            <label><input type="checkbox" data-ov="boxes" checked /> 检测框</label>
+            <label><input type="checkbox" data-ov="labels" checked /> 标签</label>
+            <label><input type="checkbox" data-ov="skeleton" checked /> 骨架</label>
+            <label><input type="checkbox" data-ov="hole" checked /> 灭菌孔区</label>
+          </div>
+          <button class="btn" type="button" id="btnHandMode" title="手套=YOLO手套框内估点；裸手=整图 RTMDet 找手再估点">手关键点：手套</button>
+        </div>
+        <div class="viewport">
+          <img id="stream" alt="live" src="/api/stream" />
+          <div class="view-meta">
+            <span id="handModeTag">戴手套</span>
+            <span id="sourceTag">source 0</span>
+          </div>
+        </div>
+      </div>
+
+      <section class="card score-card">
+        <div class="card-h">
+          <h2>四维评分</h2>
+          <div class="total"><span>总分</span><b id="totalScore">0.0</b><small>/ 100</small></div>
+        </div>
+        <div class="dims" id="dims"></div>
+      </section>
+    </section>
+
+    <aside class="col right">
+      <section class="card">
+        <div class="card-h"><h2>动作明细</h2><span class="hint">测试用逐步条件</span></div>
+        <div class="actions" id="actions"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-h"><h2>手持 / 物品</h2><span class="chip" id="holdChip">未持物</span></div>
+        <div class="hold" id="holding">—</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ID</th><th>名称</th><th>倾角</th><th>状态</th></tr></thead>
+            <tbody id="objBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card log-card">
+        <div class="card-h">
+          <h2>事件流</h2>
+          <div class="filters">
+            <button class="mini on" data-f="all">全部</button>
+            <button class="mini" data-f="动作">动作</button>
+            <button class="mini" data-f="计时">计时</button>
+            <button class="mini" data-f="OCR">OCR</button>
+            <button class="mini" data-f="系统">系统</button>
+          </div>
+        </div>
+        <ul class="log" id="log"></ul>
+      </section>
+    </aside>
+  </main>
+
+  <div class="drawer-mask" id="mask"></div>
+  <aside class="drawer" id="drawer">
+    <div class="card-h"><h2>系统设置</h2><button class="btn ghost" id="btnCloseSet">关闭</button></div>
+    <form id="setForm" class="form">
+      <label>学员姓名<input name="student" placeholder="用于报告署名" /></label>
+      <label>视频源<input name="source" placeholder="摄像头编号或视频路径，如 0" /></label>
+      <label>上传本地视频<input type="file" id="videoFile" accept="video/*" /></label>
+      <label>手模式
+        <select name="hand_mode">
+          <option value="glove">戴手套（YOLO 手套框）</option>
+          <option value="bare">不戴手套（RTMDet 全图）</option>
+        </select>
+      </label>
+      <label>推理设备<input name="device" placeholder="0 / cpu" /></label>
+      <label>输入边长<input name="imgsz" type="number" value="640" /></label>
+      <label>检测置信度<input name="conf" type="number" step="0.05" value="0.25" /></label>
+      <fieldset>
+        <legend>动作阈值</legend>
+        <label>倾倒角 °<input name="pour_tilt_deg" type="number" step="1" /></label>
+        <label>回正角 °<input name="pour_upright_deg" type="number" step="1" /></label>
+        <label>切割跨度 px<input name="cut_span_px" type="number" step="1" /></label>
+        <label>切割连续帧<input name="cut_hold_frames" type="number" step="1" /></label>
+        <label>摇晃角度极差 °<input name="shake_min_range" type="number" step="0.5" /></label>
+      </fieldset>
+      <button class="btn primary" type="submit">保存设置</button>
+    </form>
+    <p class="hint">加载模型只需一次。开始实训会打开摄像头或视频并启动推理线程。</p>
+  </aside>
+
+  <div class="modal-mask" id="reportMask">
+    <div class="modal">
+      <div class="card-h"><h2>实训报告</h2><button class="btn ghost" id="btnCloseReport">关闭</button></div>
+      <pre id="reportJson"></pre>
+      <div class="top-actions">
+        <button class="btn primary" id="btnDlJson">下载 JSON</button>
+        <button class="btn" id="btnDlTxt">复制摘要</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=6"></script>
+</body>
+</html>
