@@ -1,4 +1,5 @@
-"""将扁平目录中的图片+YOLO-OBB txt 按 8:2 划分到 images/labels 的 train、val。"""
+"""将扁平目录中的图片+YOLO-OBB txt 按 8:2 划分到 images/labels 的 train、val。."""
+
 from __future__ import annotations
 
 import argparse
@@ -39,7 +40,7 @@ def split_group(items: list[Path], ratio: float) -> tuple[list[Path], list[Path]
         return [], []
     if n == 1:
         return items, []
-    n_train = int(round(n * ratio))
+    n_train = round(n * ratio)
     n_train = min(max(n_train, 1), n - 1)
     return items[:n_train], items[n_train:]
 
@@ -58,13 +59,7 @@ def copy_pair(im: Path, split: str, dst: Path) -> None:
 def write_yaml(dst: Path) -> None:
     names = "\n".join(f"  {i}: {n}" for i, n in enumerate(CLASS_NAMES))
     path = dst.resolve().as_posix()
-    text = (
-        f"path: {path}\n"
-        f"train: images/train\n"
-        f"val: images/val\n"
-        f"nc: {len(CLASS_NAMES)}\n"
-        f"names:\n{names}\n"
-    )
+    text = f"path: {path}\ntrain: images/train\nval: images/val\nnc: {len(CLASS_NAMES)}\nnames:\n{names}\n"
     (dst / "data.yaml").write_text(text, encoding="utf-8")
 
 
@@ -91,9 +86,7 @@ def main() -> None:
     dst.mkdir(parents=True, exist_ok=True)
 
     random.seed(args.seed)
-    images = sorted(
-        f for f in src.iterdir() if f.is_file() and f.suffix.lower() in IMG_EXTS
-    )
+    images = sorted(f for f in src.iterdir() if f.is_file() and f.suffix.lower() in IMG_EXTS)
     if not images:
         raise FileNotFoundError(f"未找到图片: {src}")
 

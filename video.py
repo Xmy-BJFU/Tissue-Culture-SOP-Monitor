@@ -1,6 +1,8 @@
-"""外接/本机摄像头实时看 YOLO-OBB 效果。本机当前只有编号 0。"""
-from ultralytics import YOLO
+"""外接/本机摄像头实时看 YOLO-OBB 效果。本机当前只有编号 0。."""
+
 import cv2
+
+from ultralytics import YOLO
 
 WEIGHTS = r"E:\XMY\代码\ultralytics\runs\train\11n_100_deg45\weights\best.pt"
 CAMERA_ID = 0  # 这台电脑探测到只有 0；没有 1

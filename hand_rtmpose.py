@@ -1,4 +1,4 @@
-"""手部关键点验证：YOLO 手套框 + RTMPose 21 点（预训练，不用标数据）。
+"""手部关键点验证：YOLO 手套框 + RTMPose 21 点（预训练，不用标数据）。.
 
 和 MediaPipe 的差别：RTMPose 看手的形状，不靠肤色找掌心，戴手套更有机会出点。
 检测仍用已经能框出「手套」的 YOLO；RTMPose 只在框里估 21 点。
@@ -14,6 +14,7 @@
 
 按键: Q 退出  S 保存  M 切换 ROI/整帧  空格暂停
 """
+
 from __future__ import annotations
 
 import argparse
@@ -25,7 +26,6 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from ultralytics import YOLO
 
 from hand_mediapipe import (  # 复用画骨架 / 中文 HUD / 裁框
     CONTEXT_CLASSES,
@@ -44,6 +44,7 @@ from hand_mediapipe import (  # 复用画骨架 / 中文 HUD / 裁框
     put_cn,
     tip_jitter_px,
 )
+from ultralytics import YOLO
 
 try:
     from rtmlib import RTMDet, RTMPose
@@ -56,8 +57,7 @@ except ImportError as exc:
 
 # OpenMMLab 手部预训练（5 个数据集，21 点，顺序与 MediaPipe 一致）
 RTMDET_URL = (
-    "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/"
-    "rtmdet_nano_8xb32-300e_hand-267f9c8f.zip"
+    "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/rtmdet_nano_8xb32-300e_hand-267f9c8f.zip"
 )
 RTMPOSE_URL = (
     "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/"
@@ -76,7 +76,7 @@ def yolo_device_to_rtm(device: str) -> str:
 
 
 def enable_ort_cuda() -> None:
-    """onnxruntime-gpu 找不到系统 CUDA 时，借用 PyTorch 自带的 cublas/cudnn。"""
+    """Onnxruntime-gpu 找不到系统 CUDA 时，借用 PyTorch 自带的 cublas/cudnn。."""
     try:
         import torch
 
@@ -118,7 +118,7 @@ def _build_rtm(device: str, det_thr: float) -> tuple[RTMDet, RTMPose]:
         backend="onnxruntime",
         device=device,
     )
-    providers = list(getattr(pose, "session").get_providers())
+    providers = list(pose.session.get_providers())
     print(f"RTMPose 设备 {device}  providers {providers}")
     return det, pose
 
@@ -154,7 +154,7 @@ def iou_xyxy(a: list[float], b: list[float]) -> float:
 
 
 def merge_boxes(primary: list[list[float]], extra: list[list[float]], iou_thr: float = 0.45) -> list[list[float]]:
-    """手套框优先；RTMDet 只补没有重叠的裸手。"""
+    """手套框优先；RTMDet 只补没有重叠的裸手。."""
     out = [list(b) for b in primary]
     for box in extra:
         if all(iou_xyxy(box, p) < iou_thr for p in out):
@@ -178,7 +178,7 @@ def match_hands_to_boxes(
     found: list[dict],
     box_xy: list[tuple[int, int, int, int]],
 ) -> tuple[list[dict], set[int]]:
-    """手腕落在哪个手套框里，就算这只手套有点。框外的骨架（RTMDet 补的裸手）照样保留。"""
+    """手腕落在哪个手套框里，就算这只手套有点。框外的骨架（RTMDet 补的裸手）照样保留。."""
     used: set[int] = set()
     for hand in found:
         wx, wy, _ = hand["pts"][0]
@@ -197,7 +197,7 @@ def pose_on_boxes(
     bboxes: list[list[float]],
     pose_conf: float,
 ) -> list[dict]:
-    """RTMPose 对每个框都会出 21 点，必须靠分数滤掉瞎猜。"""
+    """RTMPose 对每个框都会出 21 点，必须靠分数滤掉瞎猜。."""
     if not bboxes:
         return []
     kpts, scores = pose(bgr, bboxes=bboxes)
