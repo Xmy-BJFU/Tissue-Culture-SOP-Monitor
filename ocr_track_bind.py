@@ -1,4 +1,4 @@
-"""瓶子 OCR 缓存与跟踪换 ID 时的标签绑定。
+"""瓶子 OCR 缓存与跟踪换 ID 时的标签绑定。.
 
 规则：
 - 未识别到标签：隔若干帧再检
@@ -10,9 +10,85 @@
 - 拿起丢框：仅当上一帧至少两瓶重叠、一只框消失、留下的框明显是另一只时才停放；
   单瓶移动或跟踪换 ID 时标签必须跟着走
 """
+
 from __future__ import annotations
 
 import numpy as np
+
+REAGENT_LABELS = ("酒精", "无菌水", "次氯酸钠", "灭菌瓶", "培养基")
+REAGENT_ALIASES = {
+    "酒精": ("酒精", "乙醇", "alcohol", "etoh"),
+    "无菌水": ("无菌水", "无菌水瓶", "灭菌水", "蒸馏水"),
+    "次氯酸钠": ("次氯酸钠", "次氯酸", "次氯", "84"),
+    "灭菌瓶": ("灭菌瓶", "灭菌罐"),
+    "培养基": ("培养基", "培养皿"),
+}
+REAGENT_CHAR_WEIGHTS = {
+    "酒精": {"酒": 3.0, "精": 3.0, "乙": 2.0, "醇": 2.0},
+    "无菌水": {"无": 2.5, "水": 4.0, "蒸": 2.0, "馏": 2.0, "菌": 0.6},
+    "次氯酸钠": {"氯": 3.0, "钠": 3.0, "次": 2.0, "酸": 1.5},
+    "灭菌瓶": {"灭": 2.5, "瓶": 4.0, "罐": 3.5, "菌": 0.6},
+    "培养基": {"培": 3.0, "养": 3.0, "基": 2.5},
+}
+
+
+def normalize_ocr_text(ocr_text: str) -> str:
+    text = "".join((ocr_text or "").split())
+    return text.replace("茵", "菌").replace("滅", "灭")
+
+
+def match_water_or_sterile(text: str) -> str:
+    """无菌水 vs 灭菌瓶：用水 / 瓶 / 罐拍板。.
+
+    共有字「菌」和短词「无菌」「灭菌」不再当结论——OCR 常把「无/灭」读反， 「灭菌水」应归无菌水，「无菌瓶」（灭读成无、没有水）应归灭菌瓶。
+    """
+    if any(p in text for p in ("无菌水", "灭菌水", "蒸馏水", "无菌水瓶")):
+        return "无菌水"
+    if any(p in text for p in ("灭菌瓶", "灭菌罐")):
+        return "灭菌瓶"
+    has_water = any(ch in text for ch in "水蒸馏")
+    has_vessel = any(ch in text for ch in "瓶罐")
+    has_wu = "无" in text
+    has_mie = "灭" in text
+    if has_water:
+        return "无菌水"
+    if has_vessel and (has_wu or has_mie):
+        return "灭菌瓶"
+    return ""
+
+
+def match_reagent_label(ocr_text: str) -> str:
+    text = normalize_ocr_text(ocr_text)
+    if not text:
+        return ""
+    pair = match_water_or_sterile(text)
+    hay = text.casefold()
+    alias_hits: list[tuple[int, str]] = []
+    for label, aliases in REAGENT_ALIASES.items():
+        if label in ("无菌水", "灭菌瓶"):
+            continue
+        for alias in (label, *aliases):
+            if alias and alias.casefold() in hay:
+                alias_hits.append((len(alias), label))
+    if alias_hits:
+        alias_hits.sort(key=lambda x: x[0], reverse=True)
+        return alias_hits[0][1]
+    if pair:
+        return pair
+    scored: list[tuple[float, float, str]] = []
+    for label in REAGENT_LABELS:
+        if label in ("无菌水", "灭菌瓶"):
+            continue
+        weights = REAGENT_CHAR_WEIGHTS[label]
+        score = sum(w for ch, w in weights.items() if ch in text)
+        consecutive = sum(2.0 for i in range(len(label) - 1) if label[i : i + 2] in text)
+        n_hit = sum(1 for ch in weights if ch in text)
+        if (score > 0 or consecutive > 0) and (n_hit >= 2 or consecutive > 0):
+            scored.append((score + consecutive, consecutive, label))
+    if not scored:
+        return ""
+    scored.sort(reverse=True)
+    return scored[0][2]
 
 
 def predicted_center(rec, frame_id: int) -> np.ndarray:
@@ -69,7 +145,7 @@ def should_run_ocr(
         return False
     if record is None:
         return True
-    has_label = bool(getattr(record, "reagent", None) or getattr(record, "raw_text", None))
+    has_label = bool(getattr(record, "reagent", None))
     if has_label and record_speed(record) >= speed_skip:
         return False
     age = int(frame_id - int(getattr(record, "ocr_frame", getattr(record, "frame_id", 0))))
@@ -95,6 +171,9 @@ def merge_ocr_cache(old, new):
     old.center = np.asarray(new.center, dtype=np.float32).reshape(-1)[:2].copy()
     old.frame_id = int(new.frame_id)
     old.ocr_frame = int(getattr(new, "ocr_frame", new.frame_id))
+    if getattr(new, "raw_text", "") and not getattr(old, "reagent", ""):
+        old.raw_text = str(new.raw_text)
+        old.score = float(getattr(new, "score", 0.0) or 0.0)
     if getattr(new, "size", 0):
         old.size = float(new.size)
     vel = getattr(new, "vel", None)
@@ -110,7 +189,7 @@ def neighbor_crop_expand(
     tid: int,
     base_expand: float,
 ) -> float:
-    """两瓶过近时缩小裁图，避免把邻瓶文字读进来。"""
+    """两瓶过近时缩小裁图，避免把邻瓶文字读进来。."""
     center = np.asarray(center, dtype=np.float32).reshape(-1)[:2]
     min_d = 1e9
     for b in bottles:
@@ -121,7 +200,7 @@ def neighbor_crop_expand(
         min_d = min(min_d, d)
         limit = 0.7 * (float(size) + float(other_s))
         if d < max(limit, 48.0):
-            return 1.0
+            return 1.05
     if min_d < float(size) * 1.35:
         return min(base_expand, 1.04)
     return base_expand
@@ -133,31 +212,7 @@ def neighbor_label_conflict(
     ocr_cache: dict,
     bottles: list,
 ) -> bool:
-    """新识别结果与近邻瓶已有标签相同，且自身原本不是该标签：视为读串，丢弃本次结果。"""
-    if not matched:
-        return False
-    own = None
-    for b in bottles:
-        other_tid, center, size, _x, _h = unpack_bottle(b)
-        if int(other_tid) == int(tid):
-            own = (center, float(size))
-            break
-    if own is None:
-        return False
-    own_c, own_s = own
-    own_rec = ocr_cache.get(tid)
-    if own_rec is not None and getattr(own_rec, "reagent", "") == matched:
-        return False
-    for b in bottles:
-        other_tid, center, size, _x, _h = unpack_bottle(b)
-        if int(other_tid) == int(tid):
-            continue
-        rec = ocr_cache.get(other_tid)
-        if rec is None or getattr(rec, "reagent", "") != matched:
-            continue
-        d = float(np.linalg.norm(center - own_c))
-        if d < max(70.0, 0.85 * (own_s + float(size))):
-            return True
+    """标签不唯一：多只瓶子可以同为酒精/无菌水等。近邻读串靠缩小裁图处理，不再互斥。."""
     return False
 
 
@@ -203,7 +258,7 @@ def bottles_overlap(b1, b2) -> bool:
 
 
 def front_tid(b1, b2) -> int:
-    """桌面机位：更靠画面下方、或框更矮的视为前面遮挡瓶。"""
+    """桌面机位：更靠画面下方、或框更矮的视为前面遮挡瓶。."""
     t1, c1, s1, x1, h1 = unpack_bottle(b1)
     t2, c2, s2, x2, h2 = unpack_bottle(b2)
     if x1 is not None and x2 is not None:
@@ -290,7 +345,7 @@ def _park_record(ocr_cache: dict, parked: dict, rec, prefer_tid: int, frame_id: 
             ocr_cache.pop(k, None)
     rec.parked = True
     rec.parked_frame = int(frame_id)
-    rec.no_bind_tids = set(int(t) for t in no_bind)
+    rec.no_bind_tids = {int(t) for t in no_bind}
     pid = int(prefer_tid)
     while pid in parked:
         pid += 1
@@ -325,7 +380,7 @@ def expire_parked(parked: dict, frame_id: int, hold_frames: int) -> None:
 
 
 def follow_cost(rec, bottle, frame_id: int) -> float:
-    """标签跟到当前框的代价：位置为主，框高只作弱约束（倾斜时高度会变）。"""
+    """标签跟到当前框的代价：位置为主，框高只作弱约束（倾斜时高度会变）。."""
     _tid, center, _s, _x, h = unpack_bottle(bottle)
     pred = predicted_center(rec, frame_id)
     d = float(np.linalg.norm(center - pred))
@@ -343,7 +398,7 @@ def handle_pickup_loss(
     frame_id: int,
     moved: list,
 ) -> set[int]:
-    """仅两瓶重叠且一只真丢框、留下的明显是另一只时才停放。单瓶换 ID 直接跟着走。"""
+    """仅两瓶重叠且一只真丢框、留下的明显是另一只时才停放。单瓶换 ID 直接跟着走。."""
     parked: dict = bind_mem.setdefault("parked", {})
     prev = bind_mem.get("prev") or []
     if len(prev) < 2 or not bottles:
@@ -377,13 +432,12 @@ def handle_pickup_loss(
             scored.append((d, tid))
         scored.sort()
         limit = 2.2 * adaptive_max_dist(rec, 140.0)
-        if scored and scored[0][0] <= limit:
-            if len(scored) == 1 or scored[1][0] - scored[0][0] >= 18.0:
-                _move_label(ocr_cache, last_seen, moved, lt, scored[0][1], frame_id)
-                rec2 = ocr_cache.get(scored[0][1])
-                if rec2 is not None:
-                    rec2.parked = False
-                continue
+        if scored and scored[0][0] <= limit and (len(scored) == 1 or scored[1][0] - scored[0][0] >= 18.0):
+            _move_label(ocr_cache, last_seen, moved, lt, scored[0][1], frame_id)
+            rec2 = ocr_cache.get(scored[0][1])
+            if rec2 is not None:
+                rec2.parked = False
+            continue
 
         if not overlapped:
             continue
@@ -410,7 +464,7 @@ def try_unpark(
     if not parked or not bottles:
         return
     parsed = [unpack_bottle(b) for b in bottles]
-    det_h = {tid: h for tid, _c, _s, _x, h in parsed}
+    {tid: h for tid, _c, _s, _x, h in parsed}
     curr_tids = {tid for tid, _c, _s, _x, _h in parsed}
 
     def unlabeled(tid: int) -> bool:
@@ -512,7 +566,7 @@ def restore_occlusion_labels(
     frame_id: int,
     moved: list,
 ) -> tuple[set[int], dict[int, int]]:
-    """遮挡时：较矮/靠前的瓶不能占有高瓶已锁定标签；错绑则立刻搬回后瓶。"""
+    """遮挡时：较矮/靠前的瓶不能占有高瓶已锁定标签；错绑则立刻搬回后瓶。."""
     crowded, front_to_rear = occlusion_map(bottles)
     for front, rear in list(front_to_rear.items()):
         if front not in det_h or rear not in det_h:
@@ -593,9 +647,7 @@ def rebind_ocr_cache(
     if not bottles:
         return moved
 
-    crowded, _front_to_rear = restore_occlusion_labels(
-        ocr_cache, bottles, det_xy, det_h, last_seen, frame_id, moved
-    )
+    crowded, _front_to_rear = restore_occlusion_labels(ocr_cache, bottles, det_xy, det_h, last_seen, frame_id, moved)
     front_tids = set(_front_to_rear.keys())
 
     locked = {tid: rec for tid, rec in ocr_cache.items() if getattr(rec, "reagent", "")}
@@ -749,7 +801,7 @@ def assign_spatial_tids(
     next_tid: int,
     sticky: float = 110.0,
 ) -> tuple[list[int], int]:
-    """无 ByteTrack 时，按预测位置给瓶子分配稳定 id，避免网格跳动丢缓存。"""
+    """无 ByteTrack 时，按预测位置给瓶子分配稳定 id，避免网格跳动丢缓存。."""
     n = len(detections)
     tids = [0] * n
     used_old: set[int] = set()

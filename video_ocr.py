@@ -1,4 +1,4 @@
-"""外接/本机摄像头实时 YOLO-OBB 检测 + 轻量 OCR。
+"""外接/本机摄像头实时 YOLO-OBB 检测 + 轻量 OCR。.
 
 和 PP-OCRv6 在线 demo 的 tiny 模型对齐：
     PP-OCRv6_tiny_det + PP-OCRv6_tiny_rec
@@ -9,6 +9,7 @@
 
 按 Q 退出，按 S 保存当前帧（同时会把 OCR 裁图存下来，方便和在线 demo 对比）。
 """
+
 from __future__ import annotations
 
 import sys
@@ -18,6 +19,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+
 from ultralytics import YOLO
 from ultralytics.utils.plotting import Annotator, colors
 
@@ -27,9 +29,9 @@ if str(ROOT) not in sys.path:
 from ocr_track_bind import (
     assign_spatial_tids,
     crowded_bottle_tids,
+    match_reagent_label,
     merge_ocr_cache,
     neighbor_crop_expand,
-    neighbor_label_conflict,
     ocr_blocked_tids,
     rebind_ocr_cache,
     should_run_ocr,
@@ -44,63 +46,20 @@ DEVICE = "0"
 OCR_CLASS = "瓶子"
 
 # ---- OCR 超参：尽量贴近在线 demo 默认，不要乱降阈值 ----
-OCR_EVERY = 4          # 每隔 N 帧才允许跑 OCR
-OCR_RETRY = 6          # 还没归到已知标签时，隔多少帧再试
-OCR_REFRESH = 18       # 已有标签时隔多少帧复核；检到不同则改用新标签，没检到则沿用
+OCR_EVERY = 4  # 每隔 N 帧才允许跑 OCR
+OCR_RETRY = 6  # 还没归到已知标签时，隔多少帧再试
+OCR_REFRESH = 18  # 已有标签时隔多少帧复核；检到不同则改用新标签，没检到则沿用
 OCR_HOLD_FRAMES = 180
 OCR_INHERIT_DIST = 140.0
 OCR_INHERIT_GAP = 40.0
 OCR_STICKY_DIST = 110.0
-CROP_EXPAND = 1.12     # 裁框略放大，避免贴边切字
-MAX_CROP_SIDE = 960    # 不要压太小；在线 demo 用的是原图清晰度
-MIN_CROP_SIDE = 48     # 只在裁图过小时才放大
-DET_THRESH = 0.3       # 官方默认约 0.3，过低会出一堆假框
-DET_BOX_THRESH = 0.6   # 官方默认约 0.6
-DET_UNCLIP = 1.5       # 官方默认约 1.5
-REC_SCORE_THRESH = 0.5 # 官方默认约 0.5；仍滤掉就降到 0.3
-
-REAGENT_LABELS = ("酒精", "无菌水", "次氯酸钠", "灭菌瓶", "培养基")
-REAGENT_ALIASES = {
-    "酒精": ("酒精", "乙醇", "alcohol", "etoh"),
-    "无菌水": ("无菌水", "无菌", "灭菌水", "蒸馏水"),
-    "次氯酸钠": ("次氯酸钠", "次氯酸", "次氯", "84"),
-    "灭菌瓶": ("灭菌瓶", "灭菌罐", "灭菌"),
-    "培养基": ("培养基", "培养皿"),
-}
-REAGENT_CHAR_WEIGHTS = {
-    "酒精": {"酒": 3.0, "精": 3.0, "乙": 2.0, "醇": 2.0},
-    "无菌水": {"无": 3.0, "菌": 3.0, "水": 1.5, "天": 0.8},
-    "次氯酸钠": {"氯": 3.0, "钠": 3.0, "次": 2.0, "酸": 1.5},
-    "灭菌瓶": {"灭": 3.0, "瓶": 2.5, "菌": 1.0},
-    "培养基": {"培": 3.0, "养": 3.0, "基": 2.5},
-}
-
-
-def match_reagent_label(ocr_text: str) -> str:
-    text = "".join((ocr_text or "").split())
-    if not text:
-        return ""
-    hay = text.casefold()
-    alias_hits = []
-    for label, aliases in REAGENT_ALIASES.items():
-        for alias in (label, *aliases):
-            if alias and alias.casefold() in hay:
-                alias_hits.append((len(alias), label))
-    if alias_hits:
-        alias_hits.sort(key=lambda x: x[0], reverse=True)
-        return alias_hits[0][1]
-    scored = []
-    for label in REAGENT_LABELS:
-        weights = REAGENT_CHAR_WEIGHTS[label]
-        score = sum(w for ch, w in weights.items() if ch in text)
-        consecutive = sum(2.0 for i in range(len(label) - 1) if label[i : i + 2] in text)
-        n_hit = sum(1 for ch in weights if ch in text)
-        if (score > 0 or consecutive > 0) and (n_hit >= 2 or consecutive > 0):
-            scored.append((score + consecutive, consecutive, label))
-    if not scored:
-        return ""
-    scored.sort(reverse=True)
-    return scored[0][2]
+CROP_EXPAND = 1.12  # 裁框略放大，避免贴边切字
+MAX_CROP_SIDE = 960  # 不要压太小；在线 demo 用的是原图清晰度
+MIN_CROP_SIDE = 48  # 只在裁图过小时才放大
+DET_THRESH = 0.3  # 官方默认约 0.3，过低会出一堆假框
+DET_BOX_THRESH = 0.6  # 官方默认约 0.6
+DET_UNCLIP = 1.5  # 官方默认约 1.5
+REC_SCORE_THRESH = 0.5  # 官方默认约 0.5；仍滤掉就降到 0.3
 
 
 @dataclass
@@ -220,7 +179,7 @@ def open_camera(camera_id: int) -> cv2.VideoCapture:
 
 
 def bottle_label(ocr_text: str) -> str:
-    """酒精瓶 / 无菌水瓶 / 次氯酸钠瓶 / 灭菌瓶 / 培养基；对不上仍显示「瓶子」。"""
+    """酒精瓶 / 无菌水瓶 / 次氯酸钠瓶 / 灭菌瓶 / 培养基；对不上仍显示「瓶子」。."""
     name = match_reagent_label(ocr_text)
     if not name:
         return OCR_CLASS
@@ -246,7 +205,7 @@ def load_ocr():
 
 
 def prepare_crop(crop: np.ndarray) -> np.ndarray:
-    """只做尺寸限制，保持彩色原图。反色/CLAHE 会和在线 demo 不一致。"""
+    """只做尺寸限制，保持彩色原图。反色/CLAHE 会和在线 demo 不一致。."""
     h, w = crop.shape[:2]
     scale = 1.0
     if min(h, w) < MIN_CROP_SIDE:
@@ -291,10 +250,7 @@ def main() -> None:
     class_names: dict[int, str] = model.names
     print(f"YOLO 类别: {class_names}")
     if OCR_CLASS not in class_names.values():
-        print(
-            f"警告: 模型类别里没有「{OCR_CLASS}」，不会触发 OCR。"
-            f"当前类别: {list(class_names.values())}"
-        )
+        print(f"警告: 模型类别里没有「{OCR_CLASS}」，不会触发 OCR。当前类别: {list(class_names.values())}")
 
     ocr = load_ocr()
     cap = open_camera(CAMERA_ID)
@@ -385,7 +341,11 @@ def main() -> None:
         for tid, det, center, size, height in bottle_rows:
             record = ocr_cache.get(tid)
             pts = det["pts"]
-            if (tid not in close_ids) and (tid not in blocked_ids) and should_run_ocr(record, frame_idx, do_ocr, OCR_RETRY, OCR_REFRESH):
+            if (
+                (tid not in close_ids)
+                and (tid not in blocked_ids)
+                and should_run_ocr(record, frame_idx, do_ocr, OCR_RETRY, OCR_REFRESH)
+            ):
                 expand = neighbor_crop_expand(center, size, bottle_obs, tid, CROP_EXPAND)
                 if det["kind"] == "obb":
                     crop = crop_obb(orig, pts, expand=expand)
@@ -393,8 +353,6 @@ def main() -> None:
                     crop = crop_aabb(orig, det["xyxy"], expand=expand)
                 text = run_ocr(ocr, crop) if crop is not None else ""
                 matched = match_reagent_label(text)
-                if neighbor_label_conflict(tid, matched, ocr_cache, bottle_obs):
-                    matched = ""
                 old_lab = record.reagent if record is not None else ""
                 new_rec = OcrSlot(
                     raw_text=matched,

@@ -13,7 +13,7 @@ from typing_extensions import Self
 
 
 def _enable_windows_vt() -> None:
-    """Enable ANSI/VT sequences so \\r and clear-line work in Windows and Cursor terminals."""
+    r"""Enable ANSI/VT sequences so \\r and clear-line work in Windows and Cursor terminals."""
     if sys.platform != "win32":
         return
     try:

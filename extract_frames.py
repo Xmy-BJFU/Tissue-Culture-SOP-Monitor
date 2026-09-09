@@ -1,4 +1,5 @@
-"""从视频抽帧，供 YOLO-OBB 标注使用。"""
+"""从视频抽帧，供 YOLO-OBB 标注使用。."""
+
 from __future__ import annotations
 
 import argparse
@@ -13,7 +14,7 @@ def parse_args() -> argparse.Namespace:
         "video",
         nargs="?",
         type=str,
-        default=r"C:\Users\Administrator\Pictures\Camera Roll\WIN_20260827_15_29_51_Pro.mp4",
+        default=r"C:\Users\Administrator\Pictures\Camera Roll\WIN_20260901_16_03_23_Pro.mp4",
         help="视频文件路径，可省略，默认使用代码里的路径",
     )
     parser.add_argument(
@@ -26,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--interval",
         type=float,
-        default=0.8,
+        default=1,
         help="抽帧间隔（秒）。默认 0.5，即每 0.5 秒保存 1 张",
     )
     parser.add_argument(
@@ -46,7 +47,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def _imwrite(path: Path, frame, ext: str) -> bool:
-    """OpenCV 的 imwrite 无法处理中文路径，改用 imencode 再写文件。"""
+    """OpenCV 的 imwrite 无法处理中文路径，改用 imencode 再写文件。."""
     params = [int(cv2.IMWRITE_JPEG_QUALITY), 95] if ext == "jpg" else []
     ok, buf = cv2.imencode(f".{ext}", frame, params)
     if not ok:
@@ -71,7 +72,7 @@ def extract_frames(
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
     duration = (total / fps) if fps > 0 else 0.0
-    step = max(1, int(round(fps * interval_sec))) if fps > 0 else 1
+    step = max(1, round(fps * interval_sec)) if fps > 0 else 1
     expected = (total // step) if total > 0 else 0
 
     print(f"视频: {video_path}")
