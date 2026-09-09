@@ -15,6 +15,7 @@ on:
 
 jobs:
   check-prs:
+    if: github.repository == 'ultralytics/ultralytics'
     runs-on: ubuntu-latest
     steps:
       - name: Install dependencies

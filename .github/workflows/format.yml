@@ -21,6 +21,7 @@ permissions:
 
 jobs:
   actions:
+    if: github.repository == 'ultralytics/ultralytics'
     runs-on: ubuntu-latest
     steps:
       - name: Run Ultralytics Actions
