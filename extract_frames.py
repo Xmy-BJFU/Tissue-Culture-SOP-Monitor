@@ -13,7 +13,7 @@ def parse_args() -> argparse.Namespace:
         "video",
         nargs="?",
         type=str,
-        default=r"C:\Users\Administrator\Pictures\Camera Roll\WIN_20260827_15_29_51_Pro.mp4",
+        default=r"C:\Users\Administrator\Pictures\Camera Roll\WIN_20260901_16_03_23_Pro.mp4",
         help="视频文件路径，可省略，默认使用代码里的路径",
     )
     parser.add_argument(
@@ -26,7 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--interval",
         type=float,
-        default=0.8,
+        default=1,
         help="抽帧间隔（秒）。默认 0.5，即每 0.5 秒保存 1 张",
     )
     parser.add_argument(

@@ -28,8 +28,8 @@ from ocr_track_bind import (
     assign_spatial_tids,
     crowded_bottle_tids,
     merge_ocr_cache,
+    match_reagent_label,
     neighbor_crop_expand,
-    neighbor_label_conflict,
     ocr_blocked_tids,
     rebind_ocr_cache,
     should_run_ocr,
@@ -58,49 +58,6 @@ DET_THRESH = 0.3       # 官方默认约 0.3，过低会出一堆假框
 DET_BOX_THRESH = 0.6   # 官方默认约 0.6
 DET_UNCLIP = 1.5       # 官方默认约 1.5
 REC_SCORE_THRESH = 0.5 # 官方默认约 0.5；仍滤掉就降到 0.3
-
-REAGENT_LABELS = ("酒精", "无菌水", "次氯酸钠", "灭菌瓶", "培养基")
-REAGENT_ALIASES = {
-    "酒精": ("酒精", "乙醇", "alcohol", "etoh"),
-    "无菌水": ("无菌水", "无菌", "灭菌水", "蒸馏水"),
-    "次氯酸钠": ("次氯酸钠", "次氯酸", "次氯", "84"),
-    "灭菌瓶": ("灭菌瓶", "灭菌罐", "灭菌"),
-    "培养基": ("培养基", "培养皿"),
-}
-REAGENT_CHAR_WEIGHTS = {
-    "酒精": {"酒": 3.0, "精": 3.0, "乙": 2.0, "醇": 2.0},
-    "无菌水": {"无": 3.0, "菌": 3.0, "水": 1.5, "天": 0.8},
-    "次氯酸钠": {"氯": 3.0, "钠": 3.0, "次": 2.0, "酸": 1.5},
-    "灭菌瓶": {"灭": 3.0, "瓶": 2.5, "菌": 1.0},
-    "培养基": {"培": 3.0, "养": 3.0, "基": 2.5},
-}
-
-
-def match_reagent_label(ocr_text: str) -> str:
-    text = "".join((ocr_text or "").split())
-    if not text:
-        return ""
-    hay = text.casefold()
-    alias_hits = []
-    for label, aliases in REAGENT_ALIASES.items():
-        for alias in (label, *aliases):
-            if alias and alias.casefold() in hay:
-                alias_hits.append((len(alias), label))
-    if alias_hits:
-        alias_hits.sort(key=lambda x: x[0], reverse=True)
-        return alias_hits[0][1]
-    scored = []
-    for label in REAGENT_LABELS:
-        weights = REAGENT_CHAR_WEIGHTS[label]
-        score = sum(w for ch, w in weights.items() if ch in text)
-        consecutive = sum(2.0 for i in range(len(label) - 1) if label[i : i + 2] in text)
-        n_hit = sum(1 for ch in weights if ch in text)
-        if (score > 0 or consecutive > 0) and (n_hit >= 2 or consecutive > 0):
-            scored.append((score + consecutive, consecutive, label))
-    if not scored:
-        return ""
-    scored.sort(reverse=True)
-    return scored[0][2]
 
 
 @dataclass
@@ -393,8 +350,6 @@ def main() -> None:
                     crop = crop_aabb(orig, det["xyxy"], expand=expand)
                 text = run_ocr(ocr, crop) if crop is not None else ""
                 matched = match_reagent_label(text)
-                if neighbor_label_conflict(tid, matched, ocr_cache, bottle_obs):
-                    matched = ""
                 old_lab = record.reagent if record is not None else ""
                 new_rec = OcrSlot(
                     raw_text=matched,

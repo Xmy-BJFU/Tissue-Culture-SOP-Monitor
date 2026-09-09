@@ -7,7 +7,7 @@ if __name__ == '__main__':
     model = YOLO('yolo11n-obb.pt')
     model.train(data=r'E:\XMY\代码\ultralytics\data.yaml',
                 imgsz=640,
-                epochs=100,
+                epochs=300,
                 batch=16,
                 workers=0,
                 device=0,
@@ -15,7 +15,7 @@ if __name__ == '__main__':
                 close_mosaic=10,
                 resume=False,
                 project=r'E:\XMY\代码\ultralytics\runs\train',
-                name='11n_100_deg45（26_17）',
+                name='11n_100_deg45（9.1）',
                 single_cls=False,
                 cache=False,
                 degrees=45,  # OBB 旋转增强，让模型不怕物体转动

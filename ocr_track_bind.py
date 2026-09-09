@@ -14,6 +14,82 @@ from __future__ import annotations
 
 import numpy as np
 
+REAGENT_LABELS = ("酒精", "无菌水", "次氯酸钠", "灭菌瓶", "培养基")
+REAGENT_ALIASES = {
+    "酒精": ("酒精", "乙醇", "alcohol", "etoh"),
+    "无菌水": ("无菌水", "无菌水瓶", "灭菌水", "蒸馏水"),
+    "次氯酸钠": ("次氯酸钠", "次氯酸", "次氯", "84"),
+    "灭菌瓶": ("灭菌瓶", "灭菌罐"),
+    "培养基": ("培养基", "培养皿"),
+}
+REAGENT_CHAR_WEIGHTS = {
+    "酒精": {"酒": 3.0, "精": 3.0, "乙": 2.0, "醇": 2.0},
+    "无菌水": {"无": 2.5, "水": 4.0, "蒸": 2.0, "馏": 2.0, "菌": 0.6},
+    "次氯酸钠": {"氯": 3.0, "钠": 3.0, "次": 2.0, "酸": 1.5},
+    "灭菌瓶": {"灭": 2.5, "瓶": 4.0, "罐": 3.5, "菌": 0.6},
+    "培养基": {"培": 3.0, "养": 3.0, "基": 2.5},
+}
+
+
+def normalize_ocr_text(ocr_text: str) -> str:
+    text = "".join((ocr_text or "").split())
+    return text.replace("茵", "菌").replace("滅", "灭")
+
+
+def match_water_or_sterile(text: str) -> str:
+    """无菌水 vs 灭菌瓶：用水 / 瓶 / 罐拍板。
+
+    共有字「菌」和短词「无菌」「灭菌」不再当结论——OCR 常把「无/灭」读反，
+    「灭菌水」应归无菌水，「无菌瓶」（灭读成无、没有水）应归灭菌瓶。
+    """
+    if any(p in text for p in ("无菌水", "灭菌水", "蒸馏水", "无菌水瓶")):
+        return "无菌水"
+    if any(p in text for p in ("灭菌瓶", "灭菌罐")):
+        return "灭菌瓶"
+    has_water = any(ch in text for ch in "水蒸馏")
+    has_vessel = any(ch in text for ch in "瓶罐")
+    has_wu = "无" in text
+    has_mie = "灭" in text
+    if has_water:
+        return "无菌水"
+    if has_vessel and (has_wu or has_mie):
+        return "灭菌瓶"
+    return ""
+
+
+def match_reagent_label(ocr_text: str) -> str:
+    text = normalize_ocr_text(ocr_text)
+    if not text:
+        return ""
+    pair = match_water_or_sterile(text)
+    hay = text.casefold()
+    alias_hits: list[tuple[int, str]] = []
+    for label, aliases in REAGENT_ALIASES.items():
+        if label in ("无菌水", "灭菌瓶"):
+            continue
+        for alias in (label, *aliases):
+            if alias and alias.casefold() in hay:
+                alias_hits.append((len(alias), label))
+    if alias_hits:
+        alias_hits.sort(key=lambda x: x[0], reverse=True)
+        return alias_hits[0][1]
+    if pair:
+        return pair
+    scored: list[tuple[float, float, str]] = []
+    for label in REAGENT_LABELS:
+        if label in ("无菌水", "灭菌瓶"):
+            continue
+        weights = REAGENT_CHAR_WEIGHTS[label]
+        score = sum(w for ch, w in weights.items() if ch in text)
+        consecutive = sum(2.0 for i in range(len(label) - 1) if label[i : i + 2] in text)
+        n_hit = sum(1 for ch in weights if ch in text)
+        if (score > 0 or consecutive > 0) and (n_hit >= 2 or consecutive > 0):
+            scored.append((score + consecutive, consecutive, label))
+    if not scored:
+        return ""
+    scored.sort(reverse=True)
+    return scored[0][2]
+
 
 def predicted_center(rec, frame_id: int) -> np.ndarray:
     dt = int(max(0, frame_id - int(getattr(rec, "frame_id", frame_id))))
@@ -69,7 +145,7 @@ def should_run_ocr(
         return False
     if record is None:
         return True
-    has_label = bool(getattr(record, "reagent", None) or getattr(record, "raw_text", None))
+    has_label = bool(getattr(record, "reagent", None))
     if has_label and record_speed(record) >= speed_skip:
         return False
     age = int(frame_id - int(getattr(record, "ocr_frame", getattr(record, "frame_id", 0))))
@@ -95,6 +171,9 @@ def merge_ocr_cache(old, new):
     old.center = np.asarray(new.center, dtype=np.float32).reshape(-1)[:2].copy()
     old.frame_id = int(new.frame_id)
     old.ocr_frame = int(getattr(new, "ocr_frame", new.frame_id))
+    if getattr(new, "raw_text", "") and not getattr(old, "reagent", ""):
+        old.raw_text = str(new.raw_text)
+        old.score = float(getattr(new, "score", 0.0) or 0.0)
     if getattr(new, "size", 0):
         old.size = float(new.size)
     vel = getattr(new, "vel", None)
@@ -121,7 +200,7 @@ def neighbor_crop_expand(
         min_d = min(min_d, d)
         limit = 0.7 * (float(size) + float(other_s))
         if d < max(limit, 48.0):
-            return 1.0
+            return 1.05
     if min_d < float(size) * 1.35:
         return min(base_expand, 1.04)
     return base_expand
@@ -133,31 +212,7 @@ def neighbor_label_conflict(
     ocr_cache: dict,
     bottles: list,
 ) -> bool:
-    """新识别结果与近邻瓶已有标签相同，且自身原本不是该标签：视为读串，丢弃本次结果。"""
-    if not matched:
-        return False
-    own = None
-    for b in bottles:
-        other_tid, center, size, _x, _h = unpack_bottle(b)
-        if int(other_tid) == int(tid):
-            own = (center, float(size))
-            break
-    if own is None:
-        return False
-    own_c, own_s = own
-    own_rec = ocr_cache.get(tid)
-    if own_rec is not None and getattr(own_rec, "reagent", "") == matched:
-        return False
-    for b in bottles:
-        other_tid, center, size, _x, _h = unpack_bottle(b)
-        if int(other_tid) == int(tid):
-            continue
-        rec = ocr_cache.get(other_tid)
-        if rec is None or getattr(rec, "reagent", "") != matched:
-            continue
-        d = float(np.linalg.norm(center - own_c))
-        if d < max(70.0, 0.85 * (own_s + float(size))):
-            return True
+    """标签不唯一：多只瓶子可以同为酒精/无菌水等。近邻读串靠缩小裁图处理，不再互斥。"""
     return False
 
 
