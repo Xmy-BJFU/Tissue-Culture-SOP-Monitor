@@ -1,4 +1,4 @@
-"""外接/本机摄像头实时 YOLO-OBB 检测 + 轻量 OCR。
+"""外接/本机摄像头实时 YOLO-OBB 检测 + 轻量 OCR。.
 
 和 PP-OCRv6 在线 demo 的 tiny 模型对齐：
     PP-OCRv6_tiny_det + PP-OCRv6_tiny_rec
@@ -9,6 +9,7 @@
 
 按 Q 退出，按 S 保存当前帧（同时会把 OCR 裁图存下来，方便和在线 demo 对比）。
 """
+
 from __future__ import annotations
 
 import sys
@@ -18,6 +19,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+
 from ultralytics import YOLO
 from ultralytics.utils.plotting import Annotator, colors
 
@@ -27,8 +29,8 @@ if str(ROOT) not in sys.path:
 from ocr_track_bind import (
     assign_spatial_tids,
     crowded_bottle_tids,
-    merge_ocr_cache,
     match_reagent_label,
+    merge_ocr_cache,
     neighbor_crop_expand,
     ocr_blocked_tids,
     rebind_ocr_cache,
@@ -44,20 +46,20 @@ DEVICE = "0"
 OCR_CLASS = "瓶子"
 
 # ---- OCR 超参：尽量贴近在线 demo 默认，不要乱降阈值 ----
-OCR_EVERY = 4          # 每隔 N 帧才允许跑 OCR
-OCR_RETRY = 6          # 还没归到已知标签时，隔多少帧再试
-OCR_REFRESH = 18       # 已有标签时隔多少帧复核；检到不同则改用新标签，没检到则沿用
+OCR_EVERY = 4  # 每隔 N 帧才允许跑 OCR
+OCR_RETRY = 6  # 还没归到已知标签时，隔多少帧再试
+OCR_REFRESH = 18  # 已有标签时隔多少帧复核；检到不同则改用新标签，没检到则沿用
 OCR_HOLD_FRAMES = 180
 OCR_INHERIT_DIST = 140.0
 OCR_INHERIT_GAP = 40.0
 OCR_STICKY_DIST = 110.0
-CROP_EXPAND = 1.12     # 裁框略放大，避免贴边切字
-MAX_CROP_SIDE = 960    # 不要压太小；在线 demo 用的是原图清晰度
-MIN_CROP_SIDE = 48     # 只在裁图过小时才放大
-DET_THRESH = 0.3       # 官方默认约 0.3，过低会出一堆假框
-DET_BOX_THRESH = 0.6   # 官方默认约 0.6
-DET_UNCLIP = 1.5       # 官方默认约 1.5
-REC_SCORE_THRESH = 0.5 # 官方默认约 0.5；仍滤掉就降到 0.3
+CROP_EXPAND = 1.12  # 裁框略放大，避免贴边切字
+MAX_CROP_SIDE = 960  # 不要压太小；在线 demo 用的是原图清晰度
+MIN_CROP_SIDE = 48  # 只在裁图过小时才放大
+DET_THRESH = 0.3  # 官方默认约 0.3，过低会出一堆假框
+DET_BOX_THRESH = 0.6  # 官方默认约 0.6
+DET_UNCLIP = 1.5  # 官方默认约 1.5
+REC_SCORE_THRESH = 0.5  # 官方默认约 0.5；仍滤掉就降到 0.3
 
 
 @dataclass
@@ -177,7 +179,7 @@ def open_camera(camera_id: int) -> cv2.VideoCapture:
 
 
 def bottle_label(ocr_text: str) -> str:
-    """酒精瓶 / 无菌水瓶 / 次氯酸钠瓶 / 灭菌瓶 / 培养基；对不上仍显示「瓶子」。"""
+    """酒精瓶 / 无菌水瓶 / 次氯酸钠瓶 / 灭菌瓶 / 培养基；对不上仍显示「瓶子」。."""
     name = match_reagent_label(ocr_text)
     if not name:
         return OCR_CLASS
@@ -203,7 +205,7 @@ def load_ocr():
 
 
 def prepare_crop(crop: np.ndarray) -> np.ndarray:
-    """只做尺寸限制，保持彩色原图。反色/CLAHE 会和在线 demo 不一致。"""
+    """只做尺寸限制，保持彩色原图。反色/CLAHE 会和在线 demo 不一致。."""
     h, w = crop.shape[:2]
     scale = 1.0
     if min(h, w) < MIN_CROP_SIDE:
@@ -248,10 +250,7 @@ def main() -> None:
     class_names: dict[int, str] = model.names
     print(f"YOLO 类别: {class_names}")
     if OCR_CLASS not in class_names.values():
-        print(
-            f"警告: 模型类别里没有「{OCR_CLASS}」，不会触发 OCR。"
-            f"当前类别: {list(class_names.values())}"
-        )
+        print(f"警告: 模型类别里没有「{OCR_CLASS}」，不会触发 OCR。当前类别: {list(class_names.values())}")
 
     ocr = load_ocr()
     cap = open_camera(CAMERA_ID)
@@ -342,7 +341,11 @@ def main() -> None:
         for tid, det, center, size, height in bottle_rows:
             record = ocr_cache.get(tid)
             pts = det["pts"]
-            if (tid not in close_ids) and (tid not in blocked_ids) and should_run_ocr(record, frame_idx, do_ocr, OCR_RETRY, OCR_REFRESH):
+            if (
+                (tid not in close_ids)
+                and (tid not in blocked_ids)
+                and should_run_ocr(record, frame_idx, do_ocr, OCR_RETRY, OCR_REFRESH)
+            ):
                 expand = neighbor_crop_expand(center, size, bottle_obs, tid, CROP_EXPAND)
                 if det["kind"] == "obb":
                     crop = crop_obb(orig, pts, expand=expand)

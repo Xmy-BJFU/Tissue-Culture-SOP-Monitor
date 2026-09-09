@@ -6,18 +6,18 @@
 
 ## 用到的技术
 
-| 环节 | 技术 |
-| --- | --- |
+| 环节                   | 技术                                                                             |
+| ---------------------- | -------------------------------------------------------------------------------- |
 | 目标检测（旋转框 OBB） | 基于 [Ultralytics YOLO](https://github.com/ultralytics/ultralytics) 的自训练权重 |
-| 多目标跟踪 | ByteTrack |
-| 瓶身文字识别 | PaddleOCR（PP-OCRv6 tiny），结果与跟踪 ID 绑定 |
+| 多目标跟踪             | ByteTrack                                                                        |
+| 瓶身文字识别           | PaddleOCR（PP-OCRv6 tiny），结果与跟踪 ID 绑定                                   |
 
 ## 常用脚本
 
 ```bash
-python video_track_ocr.py   # 摄像头：检测 + 跟踪 + 瓶子 OCR
-python video_ocr.py         # 摄像头：检测 + 瓶子 OCR
-python detect.py            # 图片/视频离线检测
+python video_track_ocr.py # 摄像头：检测 + 跟踪 + 瓶子 OCR
+python video_ocr.py       # 摄像头：检测 + 瓶子 OCR
+python detect.py          # 图片/视频离线检测
 ```
 
 检测部分基于 Ultralytics YOLO，许可证仍为 AGPL-3.0。
